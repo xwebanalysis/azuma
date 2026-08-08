@@ -1,88 +1,102 @@
-<header class="topbar">
+<nav class="topbar">
   <div class="brand">
-    <span class="brand-mark">A</span>
-    <span class="brand-name">Azuma</span>
-    <span class="brand-sub">form &amp; auth flow analysis</span>
+    <h1 class="t-heading">AZUMA</h1>
+    <span class="t-label">XWA - MODULE</span>
   </div>
-  <div class="status" [class.online]="backendOnline" [class.offline]="!backendOnline">
-    {{ backendOnline ? 'backend online' : 'backend offline' }}
+  <div class="topbar-actions">
+    <span class="t-label status-label" [class.text-success]="backendOnline" [class.text-accent]="!backendOnline">
+      [{{ backendOnline ? 'BACKEND ONLINE' : 'BACKEND OFFLINE' }}]
+    </span>
+    <button type="button" class="theme-toggle-btn" (click)="toggleTheme()">
+      <span>{{ themeLabel() }}</span>
+    </button>
   </div>
-</header>
+</nav>
 
-<main class="container">
-  <section class="hero">
-    <h1>Form Discovery</h1>
-    <p>Analyze web forms and authentication flows on a target site.</p>
+<main class="container dot-grid-subtle">
+  <header class="section-header">
+    <div>
+      <h1 class="t-heading">FORM DISCOVERY</h1>
+      <span class="t-label">WEB FORM &amp; AUTH FLOW ANALYSIS</span>
+    </div>
+  </header>
 
+  <section class="panel">
+    <label class="t-label" for="target-input">TARGET</label>
     <form class="discover" (ngSubmit)="discover()">
       <input
         type="text"
+        id="target-input"
         name="target"
+        class="input-field"
         [(ngModel)]="target"
         placeholder="https://example.com"
         autocomplete="off"
       />
-      <button type="submit" [disabled]="loading || !target.trim()">
-        {{ loading ? 'Analyzing...' : 'Discover' }}
+      <button type="submit" class="btn-primary" [disabled]="loading || !target.trim()">
+        {{ loading ? 'ANALYZING...' : 'DISCOVER' }}
       </button>
     </form>
 
+    @if (loading) {
+      <div class="t-label text-warning">[ LOADING... ]</div>
+    }
     @if (error) {
-      <p class="error">{{ error }}</p>
+      <div class="t-label text-accent">[ERROR: {{ error }}]</div>
     }
   </section>
 
   @if (analysisId !== null) {
     <section class="results">
-      <h2>
-        Analysis #{{ analysisId }}
-        <span class="count">{{ forms.length }} form(s) found</span>
-      </h2>
+      <header class="section-header results-header">
+        <div>
+          <h1 class="t-heading">ANALYSIS #{{ analysisId }}</h1>
+          <span class="t-label">{{ forms.length }} FORM(S) FOUND</span>
+        </div>
+      </header>
 
       @for (form of forms; track form.id) {
-        <article class="form-card" [class.expanded]="expandedForm === form.id">
-          <button class="form-header" (click)="toggleForm(form.id)">
-            <span class="method" [class.get]="form.method === 'GET'" [class.post]="form.method === 'POST'">
+        <details class="nothing-accordion">
+          <summary>
+            <span class="method" [class.text-interactive]="form.method === 'GET'" [class.text-success]="form.method === 'POST'">
               {{ form.method }}
             </span>
-            <span class="action">{{ form.action || '(no action)' }}</span>
-            <span class="badge" [class.secure]="form.is_secure" [class.insecure]="!form.is_secure">
-              {{ form.is_secure ? 'https' : 'http' }}
+            <span class="t-label action">{{ form.action || '(NO ACTION)' }}</span>
+            <span class="t-label" [class.text-success]="form.is_secure" [class.text-warning]="!form.is_secure">
+              [{{ form.is_secure ? 'HTTPS' : 'HTTP' }}]
             </span>
-            <span class="fields">{{ form.fields.length }} field(s)</span>
-            <span class="chevron">{{ expandedForm === form.id ? '▾' : '▸' }}</span>
-          </button>
-
-          @if (expandedForm === form.id) {
-            <div class="form-body">
-              <p class="page-url">{{ form.page_url }}</p>
-              <table>
-                <thead>
+            <span class="t-label">{{ form.fields.length }} FIELD(S)</span>
+          </summary>
+          <div class="accordion-content">
+            <p class="t-label page-url">{{ form.page_url }}</p>
+            <table>
+              <thead>
+                <tr>
+                  <th class="t-label">TYPE</th>
+                  <th class="t-label">NAME</th>
+                  <th class="t-label">REQUIRED</th>
+                  <th class="t-label">AUTOCOMPLETE</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (field of form.fields; track field.id) {
                   <tr>
-                    <th>Type</th>
-                    <th>Name</th>
-                    <th>Required</th>
-                    <th>Autocomplete</th>
+                    <td class="t-data">{{ field.input_type }}</td>
+                    <td class="t-data">{{ field.name }}</td>
+                    <td class="t-data" [class.text-success]="field.required">{{ field.required ? 'YES' : 'NO' }}</td>
+                    <td class="t-data">{{ field.autocomplete || '—' }}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  @for (field of form.fields; track field.id) {
-                    <tr>
-                      <td>{{ field.input_type }}</td>
-                      <td>{{ field.name }}</td>
-                      <td>{{ field.required ? 'yes' : 'no' }}</td>
-                      <td>{{ field.autocomplete || '—' }}</td>
-                    </tr>
-                  } @empty {
-                    <tr><td colspan="4">No fields</td></tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          }
-        </article>
+                } @empty {
+                  <tr>
+                    <td colspan="4" class="t-label">NO FIELDS</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </details>
       } @empty {
-        <p class="empty">No forms discovered on this target.</p>
+        <div class="empty-state t-label">[ NO FORMS DISCOVERED ]</div>
       }
     </section>
   }

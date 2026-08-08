@@ -79,8 +79,9 @@ frontend/
 ```
 
 - Standalone components with the modern control-flow syntax (`@if`, `@for`, `@empty`).
-- `ApiService` talks to `http://localhost:8000` (CORS is open in development).
-- The dashboard shows backend health, runs discovery and renders expandable form cards with field tables.
+- The UI follows the **Nothing Design System** (shared across XWA modules): monochrome instrument-panel dark mode with a light "printed manual" mode, Doto / Space Grotesk / Space Mono typography, dot-grid motif, all-caps monospace labels, flat surfaces and no shadows or gradients. Design tokens live in `src/styles.scss`; `ThemeService` manages dark/light mode with Angular Signals.
+- `ApiService` targets `http://<current hostname>:8000` (CORS is open in development).
+- The dashboard shows backend health, runs discovery and renders forms as accordion panels with field tables.
 
 ## Data contracts
 
