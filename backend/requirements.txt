@@ -6,6 +6,7 @@ httpx==0.28.1
 beautifulsoup4==4.15.0
 lxml==6.1.1
 psycopg2-binary==2.9.12
+PyJWT==2.13.0
 
 # XWA SDK — shared data contracts (Event/Error envelopes, validation)
 xwa-sdk @ git+https://github.com/xwebanalysis/xwa-sdk.git#subdirectory=bindings/python

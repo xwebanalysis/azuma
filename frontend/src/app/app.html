@@ -49,12 +49,17 @@
   @if (analysis) {
     <section class="results">
       <header class="section-header results-header">
-        <div>
-          <h1 class="t-heading">ANALYSIS #{{ analysis.id }}</h1>
-          <span class="t-label">
-            {{ analysis.forms.length }} FORM(S) / {{ analysis.oauth_flows.length }} OAUTH FLOW(S) /
-            {{ analysis.session_cookies.length }} COOKIE(S)
-          </span>
+        <div class="results-heading">
+          <div>
+            <h1 class="t-heading">ANALYSIS #{{ analysis.id }}</h1>
+            <span class="t-label">
+              {{ analysis.forms.length }} FORM(S) / {{ analysis.oauth_flows.length }} OAUTH FLOW(S) /
+              {{ analysis.session_cookies.length }} COOKIE(S)
+            </span>
+          </div>
+          <button type="button" class="export-btn" (click)="exportJson()">
+            <span>EXPORT JSON</span>
+          </button>
         </div>
       </header>
 
@@ -178,4 +183,27 @@
       </section>
     </section>
   }
+
+  <section class="history">
+    <header class="section-header results-header">
+      <div>
+        <h1 class="t-heading">HISTORY</h1>
+        <span class="t-label">RECENT ANALYSES</span>
+      </div>
+    </header>
+    @if (history.length > 0) {
+      @for (item of history; track item.id) {
+        <button type="button" class="history-item" (click)="loadAnalysis(item.id)">
+          <span class="t-data">#{{ item.id }}</span>
+          <span class="t-data history-target">{{ item.target }}</span>
+          <span class="t-data" [class.text-success]="item.status === 'COMPLETED'" [class.text-accent]="item.status === 'ERROR'">
+            {{ item.status }}
+          </span>
+          <span class="t-label">{{ item.form_count }}F / {{ item.oauth_flow_count }}O / {{ item.session_cookie_count }}C</span>
+        </button>
+      }
+    } @else {
+      <div class="empty-state t-label">[ NO ANALYSES YET ]</div>
+    }
+  </section>
 </main>

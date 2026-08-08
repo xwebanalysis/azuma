@@ -33,7 +33,7 @@ This file is formatted to be synced automatically with GitHub Issues using the `
 
 ## Reporting & Production Hardening <!-- phase:production-hardening -->
 
-- [ ] Build authentication flow report generator
-- [ ] Create JSON export for analysis results
-- [ ] Wrap backend routes with JWT Authentication middleware
-- [ ] Implement rate limiting and access controls
+- [x] Build authentication flow report generator
+- [x] Create JSON export for analysis results
+- [x] Wrap backend routes with JWT Authentication middleware
+- [x] Implement rate limiting and access controls

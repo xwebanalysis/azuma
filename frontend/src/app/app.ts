@@ -2,7 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 
-import { ApiService, Form, FormAnalysis } from './services/api.service';
+import { ApiService, AnalysisListItem, Form, FormAnalysis } from './services/api.service';
 import { ThemeService } from './services/theme.service';
 
 @Component({
@@ -20,11 +20,15 @@ export class App implements OnInit {
   protected error: string | null = null;
   protected backendOnline = false;
   protected analysis: FormAnalysis | null = null;
+  protected history: AnalysisListItem[] = [];
 
   ngOnInit(): void {
     this.theme.initTheme();
     this.api.health().subscribe({
-      next: () => (this.backendOnline = true),
+      next: () => {
+        this.backendOnline = true;
+        this.loadHistory();
+      },
       error: () => (this.backendOnline = false),
     });
   }
@@ -48,12 +52,42 @@ export class App implements OnInit {
       next: (response) => {
         this.analysis = response.analysis;
         this.loading = false;
+        this.loadHistory();
       },
       error: (err) => {
         this.error = err.error?.detail ?? 'Failed to reach the backend.';
         this.loading = false;
       },
     });
+  }
+
+  loadHistory(): void {
+    this.api.listAnalyses().subscribe({
+      next: (items) => (this.history = items),
+      error: () => undefined,
+    });
+  }
+
+  loadAnalysis(id: number): void {
+    this.error = null;
+    this.api.getAnalysis(id).subscribe({
+      next: (analysis) => (this.analysis = analysis),
+      error: () => (this.error = 'Failed to load analysis.'),
+    });
+  }
+
+  exportJson(): void {
+    if (!this.analysis) {
+      return;
+    }
+    const payload = JSON.stringify(this.analysis, null, 2);
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `azuma-analysis-${this.analysis.id}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   csrfCount(form: Form): number {

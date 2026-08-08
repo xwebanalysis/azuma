@@ -50,11 +50,15 @@ backend/
 
 1. The client calls `POST /api/forms/discover` with a target.
 2. A `FormAnalysis` row is created with status `RUNNING`.
-3. `analyzer.discover` fetches and parses the target.
-4. Forms and fields are persisted and linked to the analysis.
+3. The pipeline runs: fetch and parse forms, flag CSRF tokens, trace GET redirect chains, detect OAuth/OIDC endpoints (HTML params plus well-known discovery documents), profile session cookies from `Set-Cookie`.
+4. Results are persisted (forms, fields, OAuth flows, session cookies) and linked to the analysis.
 5. The analysis is marked `COMPLETED` (or `ERROR` with an error message) and returned.
 
-A WebSocket variant (`/api/forms/live`) performs the same analysis while streaming xwa-sdk `Event` envelopes: `analysis_started`, `analysis_progress`, one `item_found` per form, `analysis_completed` or `analysis_error`.
+A WebSocket variant (`/api/forms/live`) performs the same analysis while streaming xwa-sdk `Event` envelopes: `analysis_started`, `analysis_progress`, one `item_found` per form / OAuth flow / session cookie, `analysis_completed` or `analysis_error`.
+
+### Security middleware
+
+- `security.py` provides two `http` middlewares. When `AZUMA_JWT_SECRET` is set, routes require an HS256 Bearer token (`POST /api/auth/token` issues one). A sliding-window rate limiter caps requests per client IP (`AZUMA_RATE_LIMIT_MAX`, default 30/min).
 
 ## Frontend
 

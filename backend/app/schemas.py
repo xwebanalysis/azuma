@@ -82,3 +82,14 @@ class DiscoverResponse(BaseModel):
     form_count: int
     oauth_flow_count: int
     session_cookie_count: int
+
+
+class AnalysisListItem(BaseModel):
+    id: int
+    target: str
+    status: str
+    analysis_type: str
+    created_at: datetime
+    form_count: int
+    oauth_flow_count: int
+    session_cookie_count: int

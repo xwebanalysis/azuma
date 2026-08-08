@@ -48,6 +48,22 @@ npm start          # ng serve --host 0.0.0.0 --poll 2000
 | `DB_NAME` | `azuma` | PostgreSQL database name |
 | `DB_USER` | `postgres` | PostgreSQL user |
 | `DB_PASS` | `postgres` | PostgreSQL password |
+| `AZUMA_JWT_SECRET` | unset | When set, all `/api/*` routes require a signed Bearer token (HS256) |
+| `AZUMA_AUTH_PASSWORD` | `azuma` | Password accepted by `POST /api/auth/token` |
+| `AZUMA_RATE_LIMIT_MAX` | `30` | Requests per IP per 60 s window |
+
+Example with auth enabled:
+
+```bash
+export AZUMA_JWT_SECRET=change-me
+export AZUMA_AUTH_PASSWORD=change-me
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# obtain a token:
+curl -X POST http://localhost:8000/api/auth/token \
+  -H 'Content-Type: application/json' -d '{"password":"change-me"}'
+# use it:
+curl -H 'Authorization: Bearer <token>' http://localhost:8000/api/analyses
+```
 
 The backend waits for PostgreSQL to become available at startup (30 retries, 1.5 s apart).
 

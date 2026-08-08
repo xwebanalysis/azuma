@@ -6,7 +6,7 @@
 
 <hr>
 
-<p><strong>Status: <em>In development</em></strong> (v0.1.0)</p>
+<p><strong>Status: <em>In development</em></strong> (v0.2.0)</p>
 
 <p>Discovery and analysis of web forms and authentication flows: form mapping, OAuth flows, session and cookie analysis.</p>
 
@@ -21,9 +21,13 @@
 ## Features (current)
 
 - Form discovery: fetch a target, extract forms, actions, methods and fields
-- Field mapping: input types, required flags, autocomplete and placeholder hints
-- Live streaming of discovery progress as xwa-sdk Events over WebSocket (`/api/forms/live`)
-- REST API with persisted analysis history (`/api/forms/discover`)
+- CSRF detection: hidden fields and token placement flagged by name and value heuristics
+- Redirect chains: GET form actions traced with bounded hop tracking
+- OAuth / OIDC mapping: authorization endpoints from HTML parameters and well-known discovery documents, with flow classification and weakness flags (implicit flow, missing state, suspicious redirect_uri)
+- Session analysis: Set-Cookie profiling (HttpOnly, Secure, SameSite, Max-Age, session-relevant filtering)
+- Live streaming of pipeline progress as xwa-sdk Events over WebSocket (`/api/forms/live`)
+- REST API with persisted analysis history, detail and JSON export endpoints
+- Optional JWT authentication and in-memory rate limiting (see docs/development.md)
 
 ## Quick start (Docker)
 
@@ -48,7 +52,11 @@
 |--------|------|-------------|
 | GET | `/` | Service info |
 | GET | `/api/health` | Health check with database status |
-| POST | `/api/forms/discover` | Run form discovery on a target |
+| POST | `/api/forms/discover` | Run the full analysis pipeline on a target |
+| GET | `/api/analyses` | List the 50 most recent analyses |
+| GET | `/api/analyses/{id}` | Analysis detail |
+| GET | `/api/analyses/{id}/export` | Download full analysis as JSON |
+| POST | `/api/auth/token` | Issue a JWT (when AZUMA_JWT_SECRET is set) |
 | WS | `/api/forms/live?target=...` | Stream discovery events (xwa-sdk Event format) |
 
 ## Project layout

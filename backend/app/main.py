@@ -3,12 +3,14 @@ import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from xwa_sdk import Event, to_dict
 
-from . import analyzer, database, models, schemas
+from . import analyzer, database, models, schemas, security
 
 SERVICE_VERSION = "0.2.0"
 
@@ -34,6 +36,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(security.auth_middleware)
+app.middleware("http")(security.rate_limit_middleware)
+
+
+class TokenRequest(BaseModel):
+    password: str
+
+
+class TokenResponse(BaseModel):
+    token: str
+    expires_in: int
 
 
 def _utcnow() -> str:
@@ -110,6 +123,119 @@ def _persist_analysis(db: Session, analysis: models.FormAnalysis, result: dict) 
                 max_age=cookie.max_age,
             )
         )
+
+
+@app.post("/api/auth/token", response_model=TokenResponse)
+def issue_token(request: TokenRequest):
+    """Issue a signed token. Only available when AZUMA_JWT_SECRET is set."""
+    if not security.AUTH_REQUIRED:
+        raise HTTPException(status_code=403, detail="Auth is disabled (no AZUMA_JWT_SECRET).")
+    if request.password != security.AUTH_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid password.")
+    return TokenResponse(
+        token=security.issue_token(),
+        expires_in=security.TOKEN_TTL_HOURS * 3600,
+    )
+
+
+@app.get("/api/analyses", response_model=list[schemas.AnalysisListItem])
+def list_analyses(db: Session = Depends(database.get_db)):
+    rows = (
+        db.query(models.FormAnalysis)
+        .order_by(models.FormAnalysis.id.desc())
+        .limit(50)
+        .all()
+    )
+    return [
+        schemas.AnalysisListItem(
+            id=row.id,
+            target=row.target,
+            status=row.status,
+            analysis_type=row.analysis_type,
+            created_at=row.created_at,
+            form_count=len(row.forms),
+            oauth_flow_count=len(row.oauth_flows),
+            session_cookie_count=len(row.session_cookies),
+        )
+        for row in rows
+    ]
+
+
+@app.get("/api/analyses/{analysis_id}", response_model=schemas.FormAnalysisRead)
+def get_analysis(analysis_id: int, db: Session = Depends(database.get_db)):
+    analysis = db.get(models.FormAnalysis, analysis_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="Analysis not found.")
+    return analysis
+
+
+@app.get("/api/analyses/{analysis_id}/export")
+def export_analysis(analysis_id: int, db: Session = Depends(database.get_db)):
+    """Full JSON export of an analysis as a downloadable file."""
+    analysis = db.get(models.FormAnalysis, analysis_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="Analysis not found.")
+
+    payload = {
+        "id": analysis.id,
+        "target": analysis.target,
+        "status": analysis.status,
+        "analysis_type": analysis.analysis_type,
+        "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
+        "started_at": analysis.started_at.isoformat() if analysis.started_at else None,
+        "finished_at": analysis.finished_at.isoformat() if analysis.finished_at else None,
+        "error_message": analysis.error_message,
+        "forms": [
+            {
+                "page_url": form.page_url,
+                "action": form.action,
+                "method": form.method,
+                "enctype": form.enctype,
+                "is_secure": bool(form.is_secure),
+                "redirect_chain": json.loads(form.redirect_chain) if form.redirect_chain else [],
+                "fields": [
+                    {
+                        "name": f.name,
+                        "input_type": f.input_type,
+                        "required": bool(f.required),
+                        "is_csrf": bool(f.is_csrf),
+                        "autocomplete": f.autocomplete,
+                    }
+                    for f in form.fields
+                ],
+            }
+            for form in analysis.forms
+        ],
+        "oauth_flows": [
+            {
+                "endpoint": flow.endpoint,
+                "flow_type": flow.flow_type,
+                "client_id": flow.client_id,
+                "redirect_uri": flow.redirect_uri,
+                "scope": flow.scope,
+                "uses_state": bool(flow.uses_state),
+                "weakness": flow.weakness,
+            }
+            for flow in analysis.oauth_flows
+        ],
+        "session_cookies": [
+            {
+                "name": cookie.name,
+                "domain": cookie.domain,
+                "path": cookie.path,
+                "http_only": bool(cookie.http_only),
+                "secure": bool(cookie.secure),
+                "same_site": cookie.same_site,
+                "max_age": cookie.max_age,
+            }
+            for cookie in analysis.session_cookies
+        ],
+    }
+
+    return JSONResponse(
+        content=payload,
+        headers={"Content-Disposition": f'attachment; filename="azuma-analysis-{analysis.id}.json"'},
+    )
 
 
 @app.post("/api/forms/discover", response_model=schemas.DiscoverResponse)
