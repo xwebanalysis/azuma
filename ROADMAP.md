@@ -5,15 +5,15 @@ This file is formatted to be synced automatically with GitHub Issues using the `
 
 ## Infrastructure & Core Initialization <!-- phase:infrastructure -->
 
-- [ ] Scaffold backend and frontend project structure
-- [ ] Dockerize environments with local development HMR support
-- [ ] Configure Docker-compose for rapid local development
-- [ ] Define shared flow data model aligned with xwa-sdk
+- [x] Scaffold backend and frontend project structure
+- [x] Dockerize environments with local development HMR support
+- [x] Configure Docker-compose for rapid local development
+- [x] Define shared flow data model aligned with xwa-sdk
 
 ## Form Discovery <!-- phase:form-discovery -->
 
-- [ ] Extract forms, inputs, and submission endpoints from DOM
-- [ ] Classify field types and validation rules
+- [x] Extract forms, inputs, and submission endpoints from DOM
+- [x] Classify field types and validation rules
 - [ ] Detect hidden fields and CSRF token placement
 - [ ] Analyze form submission flows and redirect chains
 

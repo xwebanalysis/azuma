@@ -1,0 +1,89 @@
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">A</span>
+    <span class="brand-name">Azuma</span>
+    <span class="brand-sub">form &amp; auth flow analysis</span>
+  </div>
+  <div class="status" [class.online]="backendOnline" [class.offline]="!backendOnline">
+    {{ backendOnline ? 'backend online' : 'backend offline' }}
+  </div>
+</header>
+
+<main class="container">
+  <section class="hero">
+    <h1>Form Discovery</h1>
+    <p>Analyze web forms and authentication flows on a target site.</p>
+
+    <form class="discover" (ngSubmit)="discover()">
+      <input
+        type="text"
+        name="target"
+        [(ngModel)]="target"
+        placeholder="https://example.com"
+        autocomplete="off"
+      />
+      <button type="submit" [disabled]="loading || !target.trim()">
+        {{ loading ? 'Analyzing...' : 'Discover' }}
+      </button>
+    </form>
+
+    @if (error) {
+      <p class="error">{{ error }}</p>
+    }
+  </section>
+
+  @if (analysisId !== null) {
+    <section class="results">
+      <h2>
+        Analysis #{{ analysisId }}
+        <span class="count">{{ forms.length }} form(s) found</span>
+      </h2>
+
+      @for (form of forms; track form.id) {
+        <article class="form-card" [class.expanded]="expandedForm === form.id">
+          <button class="form-header" (click)="toggleForm(form.id)">
+            <span class="method" [class.get]="form.method === 'GET'" [class.post]="form.method === 'POST'">
+              {{ form.method }}
+            </span>
+            <span class="action">{{ form.action || '(no action)' }}</span>
+            <span class="badge" [class.secure]="form.is_secure" [class.insecure]="!form.is_secure">
+              {{ form.is_secure ? 'https' : 'http' }}
+            </span>
+            <span class="fields">{{ form.fields.length }} field(s)</span>
+            <span class="chevron">{{ expandedForm === form.id ? '▾' : '▸' }}</span>
+          </button>
+
+          @if (expandedForm === form.id) {
+            <div class="form-body">
+              <p class="page-url">{{ form.page_url }}</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Name</th>
+                    <th>Required</th>
+                    <th>Autocomplete</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (field of form.fields; track field.id) {
+                    <tr>
+                      <td>{{ field.input_type }}</td>
+                      <td>{{ field.name }}</td>
+                      <td>{{ field.required ? 'yes' : 'no' }}</td>
+                      <td>{{ field.autocomplete || '—' }}</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="4">No fields</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </article>
+      } @empty {
+        <p class="empty">No forms discovered on this target.</p>
+      }
+    </section>
+  }
+</main>

@@ -1,0 +1,46 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./frontend:/app/
+      - /app/node_modules/
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+    environment:
+      - DB_HOST=db
+      - DB_NAME=azuma
+      - DB_USER=postgres
+      - DB_PASS=postgres
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=azuma
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d azuma"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_data:
