@@ -16,8 +16,8 @@
 <main class="container dot-grid-subtle">
   <header class="section-header">
     <div>
-      <h1 class="t-heading">FORM DISCOVERY</h1>
-      <span class="t-label">WEB FORM &amp; AUTH FLOW ANALYSIS</span>
+      <h1 class="t-heading">FORM &amp; AUTH ANALYSIS</h1>
+      <span class="t-label">FORM DISCOVERY / OAUTH MAPPING / SESSION ANALYSIS</span>
     </div>
   </header>
 
@@ -34,7 +34,7 @@
         autocomplete="off"
       />
       <button type="submit" class="btn-primary" [disabled]="loading || !target.trim()">
-        {{ loading ? 'ANALYZING...' : 'DISCOVER' }}
+        {{ loading ? 'ANALYZING...' : 'ANALYZE' }}
       </button>
     </form>
 
@@ -46,16 +46,20 @@
     }
   </section>
 
-  @if (analysisId !== null) {
+  @if (analysis) {
     <section class="results">
       <header class="section-header results-header">
         <div>
-          <h1 class="t-heading">ANALYSIS #{{ analysisId }}</h1>
-          <span class="t-label">{{ forms.length }} FORM(S) FOUND</span>
+          <h1 class="t-heading">ANALYSIS #{{ analysis.id }}</h1>
+          <span class="t-label">
+            {{ analysis.forms.length }} FORM(S) / {{ analysis.oauth_flows.length }} OAUTH FLOW(S) /
+            {{ analysis.session_cookies.length }} COOKIE(S)
+          </span>
         </div>
       </header>
 
-      @for (form of forms; track form.id) {
+      <h2 class="t-label section-title">FORMS</h2>
+      @for (form of analysis.forms; track form.id) {
         <details class="nothing-accordion">
           <summary>
             <span class="method" [class.text-interactive]="form.method === 'GET'" [class.text-success]="form.method === 'POST'">
@@ -65,16 +69,21 @@
             <span class="t-label" [class.text-success]="form.is_secure" [class.text-warning]="!form.is_secure">
               [{{ form.is_secure ? 'HTTPS' : 'HTTP' }}]
             </span>
+            <span class="t-label">{{ csrfCount(form) }} CSRF</span>
             <span class="t-label">{{ form.fields.length }} FIELD(S)</span>
           </summary>
           <div class="accordion-content">
             <p class="t-label page-url">{{ form.page_url }}</p>
+            @if (form.redirect_chain) {
+              <p class="t-label page-url">REDIRECT CHAIN: {{ redirectSummary(form) }}</p>
+            }
             <table>
               <thead>
                 <tr>
                   <th class="t-label">TYPE</th>
                   <th class="t-label">NAME</th>
                   <th class="t-label">REQUIRED</th>
+                  <th class="t-label">CSRF</th>
                   <th class="t-label">AUTOCOMPLETE</th>
                 </tr>
               </thead>
@@ -84,11 +93,12 @@
                     <td class="t-data">{{ field.input_type }}</td>
                     <td class="t-data">{{ field.name }}</td>
                     <td class="t-data" [class.text-success]="field.required">{{ field.required ? 'YES' : 'NO' }}</td>
+                    <td class="t-data" [class.text-warning]="field.is_csrf">{{ field.is_csrf ? 'TOKEN' : '—' }}</td>
                     <td class="t-data">{{ field.autocomplete || '—' }}</td>
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="4" class="t-label">NO FIELDS</td>
+                    <td colspan="5" class="t-label">NO FIELDS</td>
                   </tr>
                 }
               </tbody>
@@ -98,6 +108,74 @@
       } @empty {
         <div class="empty-state t-label">[ NO FORMS DISCOVERED ]</div>
       }
+
+      <h2 class="t-label section-title">OAUTH FLOWS</h2>
+      <section class="panel">
+        @if (analysis.oauth_flows.length > 0) {
+          <table>
+            <thead>
+              <tr>
+                <th class="t-label">ENDPOINT</th>
+                <th class="t-label">FLOW</th>
+                <th class="t-label">CLIENT</th>
+                <th class="t-label">STATE</th>
+                <th class="t-label">WEAKNESS</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (flow of analysis.oauth_flows; track flow.id) {
+                <tr>
+                  <td class="t-data">{{ flow.endpoint }}</td>
+                  <td class="t-data">{{ flow.flow_type }}</td>
+                  <td class="t-data">{{ flow.client_id || '—' }}</td>
+                  <td class="t-data" [class.text-success]="flow.uses_state" [class.text-accent]="!flow.uses_state">
+                    {{ flow.uses_state ? 'YES' : 'NO' }}
+                  </td>
+                  <td class="t-data" [class.text-warning]="flow.weakness">{{ flow.weakness || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <div class="empty-state t-label">[ NO OAUTH FLOWS DETECTED ]</div>
+        }
+      </section>
+
+      <h2 class="t-label section-title">SESSION COOKIES</h2>
+      <section class="panel">
+        @if (analysis.session_cookies.length > 0) {
+          <table>
+            <thead>
+              <tr>
+                <th class="t-label">NAME</th>
+                <th class="t-label">VALUE</th>
+                <th class="t-label">HTTPONLY</th>
+                <th class="t-label">SECURE</th>
+                <th class="t-label">SAMESITE</th>
+                <th class="t-label">MAX-AGE</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (cookie of analysis.session_cookies; track cookie.id) {
+                <tr>
+                  <td class="t-data">{{ cookie.name }}</td>
+                  <td class="t-data">{{ cookie.value_preview }}</td>
+                  <td class="t-data" [class.text-success]="cookie.http_only" [class.text-accent]="!cookie.http_only">
+                    {{ cookie.http_only ? 'YES' : 'NO' }}
+                  </td>
+                  <td class="t-data" [class.text-success]="cookie.secure" [class.text-accent]="!cookie.secure">
+                    {{ cookie.secure ? 'YES' : 'NO' }}
+                  </td>
+                  <td class="t-data">{{ cookie.same_site || '—' }}</td>
+                  <td class="t-data">{{ cookie.max_age || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <div class="empty-state t-label">[ NO SESSION COOKIES PROFILED ]</div>
+        }
+      </section>
     </section>
   }
 </main>
