@@ -61,6 +61,17 @@ export interface FormAnalysis {
   session_cookies: SessionCookie[];
 }
 
+export interface AnalysisListItem {
+  id: number;
+  target: string;
+  status: string;
+  analysis_type: string;
+  created_at: string;
+  form_count: number;
+  oauth_flow_count: number;
+  session_cookie_count: number;
+}
+
 export interface DiscoverResponse {
   analysis: FormAnalysis;
   form_count: number;
@@ -84,5 +95,13 @@ export class ApiService {
       `${this.apiUrl}/api/forms/discover`,
       { target },
     );
+  }
+
+  listAnalyses(): Observable<AnalysisListItem[]> {
+    return this.http.get<AnalysisListItem[]>(`${this.apiUrl}/api/analyses`);
+  }
+
+  getAnalysis(id: number): Observable<FormAnalysis> {
+    return this.http.get<FormAnalysis>(`${this.apiUrl}/api/analyses/${id}`);
   }
 }
