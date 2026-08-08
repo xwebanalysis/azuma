@@ -70,6 +70,13 @@ frontend/
 └── package.json         # Angular 22
 ```
 
+## Documentation
+
+- [docs/README.md](docs/README.md) — documentation index
+- [docs/architecture.md](docs/architecture.md) — stack, layout and data flow
+- [docs/api.md](docs/api.md) — REST and WebSocket API reference
+- [docs/development.md](docs/development.md) — execution modes, environment variables, verification
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) — next: OAuth flow mapping, session analysis, production hardening.
