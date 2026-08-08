@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 
 import { ApiService, Form } from './services/api.service';
+import { ThemeService } from './services/theme.service';
 
 @Component({
   selector: 'app-root',
@@ -12,6 +13,7 @@ import { ApiService, Form } from './services/api.service';
 })
 export class App implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly theme = inject(ThemeService);
 
   protected target = '';
   protected loading = false;
@@ -19,13 +21,21 @@ export class App implements OnInit {
   protected backendOnline = false;
   protected forms: Form[] = [];
   protected analysisId: number | null = null;
-  protected expandedForm: number | null = null;
 
   ngOnInit(): void {
+    this.theme.initTheme();
     this.api.health().subscribe({
       next: () => (this.backendOnline = true),
       error: () => (this.backendOnline = false),
     });
+  }
+
+  toggleTheme(): void {
+    this.theme.toggleTheme();
+  }
+
+  themeLabel(): string {
+    return this.theme.nextThemeLabel();
   }
 
   discover(): void {
@@ -46,9 +56,5 @@ export class App implements OnInit {
         this.loading = false;
       },
     });
-  }
-
-  toggleForm(id: number): void {
-    this.expandedForm = this.expandedForm === id ? null : id;
   }
 }

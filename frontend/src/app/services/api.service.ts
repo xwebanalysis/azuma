@@ -41,7 +41,7 @@ export interface DiscoverResponse {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = 'http://localhost:8000';
+  private readonly apiUrl = `http://${window.location.hostname}:8000`;
 
   health(): Observable<{ status: string; database: string; version: string }> {
     return this.http.get<{ status: string; database: string; version: string }>(
