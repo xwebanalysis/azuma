@@ -150,6 +150,11 @@
   }
 }
 
+.section-title {
+  margin: var(--space-2xl) 0 var(--space-md);
+  letter-spacing: 0.12em;
+}
+
 .method {
   font-family: var(--font-data);
   font-size: var(--label);

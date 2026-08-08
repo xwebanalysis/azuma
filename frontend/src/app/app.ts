@@ -2,7 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 
-import { ApiService, Form } from './services/api.service';
+import { ApiService, Form, FormAnalysis } from './services/api.service';
 import { ThemeService } from './services/theme.service';
 
 @Component({
@@ -19,8 +19,7 @@ export class App implements OnInit {
   protected loading = false;
   protected error: string | null = null;
   protected backendOnline = false;
-  protected forms: Form[] = [];
-  protected analysisId: number | null = null;
+  protected analysis: FormAnalysis | null = null;
 
   ngOnInit(): void {
     this.theme.initTheme();
@@ -47,8 +46,7 @@ export class App implements OnInit {
     this.error = null;
     this.api.discoverForms(target).subscribe({
       next: (response) => {
-        this.forms = response.analysis.forms;
-        this.analysisId = response.analysis.id;
+        this.analysis = response.analysis;
         this.loading = false;
       },
       error: (err) => {
@@ -56,5 +54,18 @@ export class App implements OnInit {
         this.loading = false;
       },
     });
+  }
+
+  csrfCount(form: Form): number {
+    return form.fields.filter((f) => f.is_csrf).length;
+  }
+
+  redirectSummary(form: Form): string {
+    try {
+      const chain: { url: string; status: number }[] = JSON.parse(form.redirect_chain ?? '[]');
+      return chain.map((hop) => `${hop.status} ${hop.url}`).join(' → ');
+    } catch {
+      return '';
+    }
   }
 }

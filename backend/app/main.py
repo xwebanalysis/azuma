@@ -5,13 +5,12 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from xwa_sdk import Event, to_dict
 
 from . import analyzer, database, models, schemas
 
-SERVICE_VERSION = "0.1.0"
+SERVICE_VERSION = "0.2.0"
 
 
 @asynccontextmanager
@@ -56,6 +55,63 @@ def health(db: Session = Depends(database.get_db)):
     return {"status": "ok", "database": db_status, "version": SERVICE_VERSION}
 
 
+def _persist_analysis(db: Session, analysis: models.FormAnalysis, result: dict) -> None:
+    for form_data in result["forms"]:
+        form = models.Form(
+            analysis_id=analysis.id,
+            page_url=form_data.page_url,
+            action=form_data.action,
+            method=form_data.method,
+            enctype=form_data.enctype,
+            is_secure=int(form_data.is_secure),
+            redirect_chain=analyzer.serialize_redirect_chain(form_data.redirect_chain),
+        )
+        db.add(form)
+        db.flush()
+        for field in form_data.fields:
+            db.add(
+                models.FormField(
+                    form_id=form.id,
+                    name=field.name,
+                    input_type=field.input_type,
+                    value=field.value,
+                    required=int(field.required),
+                    autocomplete=field.autocomplete,
+                    placeholder=field.placeholder,
+                    is_csrf=int(field.is_csrf),
+                )
+            )
+
+    for flow in result["oauth_flows"]:
+        db.add(
+            models.OAuthFlow(
+                analysis_id=analysis.id,
+                endpoint=flow.endpoint,
+                flow_type=flow.flow_type,
+                client_id=flow.client_id,
+                redirect_uri=flow.redirect_uri,
+                scope=flow.scope,
+                uses_state=int(flow.uses_state),
+                weakness=", ".join(flow.weakness) if flow.weakness else None,
+            )
+        )
+
+    for cookie in result["session_cookies"]:
+        db.add(
+            models.SessionCookie(
+                analysis_id=analysis.id,
+                name=cookie.name,
+                value_preview=cookie.value_preview,
+                domain=cookie.domain,
+                path=cookie.path,
+                http_only=int(cookie.http_only),
+                secure=int(cookie.secure),
+                same_site=cookie.same_site,
+                max_age=cookie.max_age,
+            )
+        )
+
+
 @app.post("/api/forms/discover", response_model=schemas.DiscoverResponse)
 async def discover_forms(
     request: schemas.DiscoverRequest,
@@ -69,30 +125,8 @@ async def discover_forms(
     db.refresh(analysis)
 
     try:
-        final_url, _, forms = await analyzer.discover(request.target)
-        for form_data in forms:
-            form = models.Form(
-                analysis_id=analysis.id,
-                page_url=form_data.page_url,
-                action=form_data.action,
-                method=form_data.method,
-                enctype=form_data.enctype,
-                is_secure=int(form_data.is_secure),
-            )
-            db.add(form)
-            db.flush()
-            for field in form_data.fields:
-                db.add(
-                    models.FormField(
-                        form_id=form.id,
-                        name=field.name,
-                        input_type=field.input_type,
-                        required=int(field.required),
-                        autocomplete=field.autocomplete,
-                        placeholder=field.placeholder,
-                    )
-                )
-
+        result = await analyzer.analyze_target(request.target)
+        _persist_analysis(db, analysis, result)
         analysis.status = "COMPLETED"
         analysis.finished_at = datetime.utcnow()
         db.commit()
@@ -104,45 +138,68 @@ async def discover_forms(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     db.refresh(analysis)
-    return schemas.DiscoverResponse(analysis=analysis, form_count=len(analysis.forms))
+    return schemas.DiscoverResponse(
+        analysis=analysis,
+        form_count=len(analysis.forms),
+        oauth_flow_count=len(analysis.oauth_flows),
+        session_cookie_count=len(analysis.session_cookies),
+    )
 
 
 @app.websocket("/api/forms/live")
 async def websocket_forms(websocket: WebSocket, target: str):
-    """Stream form discovery progress as xwa-sdk Events."""
+    """Stream the full analysis pipeline as xwa-sdk Events."""
     await websocket.accept()
     seq = 0
 
     def event(event_type: str, payload=None) -> str:
         nonlocal seq
         seq += 1
-        return to_dict(
-            Event(
-                seq=seq,
-                type=event_type,
-                tool="azuma",
-                analysis_id=target,
-                ts=_utcnow(),
-                payload=payload,
+        return json.dumps(
+            to_dict(
+                Event(
+                    seq=seq,
+                    type=event_type,
+                    tool="azuma",
+                    analysis_id=target,
+                    ts=_utcnow(),
+                    payload=payload,
+                )
             )
         )
 
     try:
-        await websocket.send_text(json.dumps(event("analysis_started", {"target": target})))
-        final_url, title, forms = await analyzer.discover(target)
+        await websocket.send_text(event("analysis_started", {"target": target}))
+        result = await analyzer.analyze_target(target)
+
         await websocket.send_text(
-            json.dumps(event("analysis_progress", {"page": final_url, "title": title}))
+            event("analysis_progress", {"page": result["final_url"], "title": result["title"]})
         )
-        for form in forms:
-            await websocket.send_text(
-                json.dumps(event("item_found", to_dict(form)))
-            )
+
+        for form in result["forms"]:
+            await websocket.send_text(event("item_found", {
+                "kind": "form", "method": form.method, "action": form.action,
+                "fields": len(form.fields), "csrf": sum(1 for f in form.fields if f.is_csrf),
+            }))
+        for flow in result["oauth_flows"]:
+            await websocket.send_text(event("item_found", {
+                "kind": "oauth_flow", "endpoint": flow.endpoint, "flow_type": flow.flow_type,
+            }))
+        for cookie in result["session_cookies"]:
+            await websocket.send_text(event("item_found", {
+                "kind": "session_cookie", "name": cookie.name, "secure": cookie.secure,
+            }))
+
         await websocket.send_text(
-            json.dumps(event("analysis_completed", {"form_count": len(forms)}))
+            event("analysis_completed", {
+                "form_count": len(result["forms"]),
+                "oauth_flow_count": len(result["oauth_flows"]),
+                "session_cookie_count": len(result["session_cookies"]),
+            })
         )
     except analyzer.TargetError as exc:
         await websocket.send_text(
-            json.dumps(event("analysis_error", {"code": "TARGET_ERROR", "message": str(exc)}))
+            event("analysis_error", {"code": "TARGET_ERROR", "message": str(exc)})
         )
     except WebSocketDisconnect:
         return

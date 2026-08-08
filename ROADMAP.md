@@ -14,20 +14,20 @@ This file is formatted to be synced automatically with GitHub Issues using the `
 
 - [x] Extract forms, inputs, and submission endpoints from DOM
 - [x] Classify field types and validation rules
-- [ ] Detect hidden fields and CSRF token placement
-- [ ] Analyze form submission flows and redirect chains
+- [x] Detect hidden fields and CSRF token placement
+- [x] Analyze form submission flows and redirect chains
 
 ## OAuth Mapping <!-- phase:oauth-mapping -->
 
-- [ ] Detect OAuth 2.0 / OIDC authorization endpoints
-- [ ] Map authorization and token exchange flows
-- [ ] Identify redirect URI and state parameter handling
-- [ ] Detect OAuth implementation weaknesses and misconfigurations
+- [x] Detect OAuth 2.0 / OIDC authorization endpoints
+- [x] Map authorization and token exchange flows
+- [x] Identify redirect URI and state parameter handling
+- [x] Detect OAuth implementation weaknesses and misconfigurations
 
 ## Session Analysis <!-- phase:session-analysis -->
 
-- [ ] Profile session cookie attributes (flags, scope, lifetime)
-- [ ] Detect session fixation and hijacking indicators
+- [x] Profile session cookie attributes (flags, scope, lifetime)
+- [x] Detect session fixation and hijacking indicators
 - [ ] Analyze logout and session invalidation behavior
 - [ ] Map session persistence across subdomains
 
