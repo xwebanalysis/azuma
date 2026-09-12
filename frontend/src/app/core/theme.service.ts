@@ -4,7 +4,7 @@ import { Inject, Injectable, signal } from '@angular/core';
 export type ThemeClass = 'theme-dark' | 'theme-light';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ThemeService {
   private readonly themeStorageKey = 'azuma-theme';
@@ -17,13 +17,16 @@ export class ThemeService {
 
   initTheme(): void {
     const storedTheme = this.readStoredTheme();
-    const bodyTheme = this.document.body.classList.contains('theme-light') ? 'theme-light' : 'theme-dark';
+    const bodyTheme = this.document.body.classList.contains('theme-light')
+      ? 'theme-light'
+      : 'theme-dark';
 
     this.applyTheme(storedTheme || bodyTheme, false);
   }
 
   toggleTheme(): void {
-    const nextTheme: ThemeClass = this.currentTheme() === 'theme-dark' ? 'theme-light' : 'theme-dark';
+    const nextTheme: ThemeClass =
+      this.currentTheme() === 'theme-dark' ? 'theme-light' : 'theme-dark';
     this.applyTheme(nextTheme, true);
   }
 
@@ -32,7 +35,9 @@ export class ThemeService {
   }
 
   nextThemeAriaLabel(): string {
-    return this.currentTheme() === 'theme-dark' ? 'Switch to light theme' : 'Switch to dark theme';
+    return this.currentTheme() === 'theme-dark'
+      ? 'Switch to light theme'
+      : 'Switch to dark theme';
   }
 
   private applyTheme(theme: ThemeClass, animate: boolean): void {

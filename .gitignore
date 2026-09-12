@@ -1,7 +1,11 @@
 backend/.venv/
 backend/azuma.db
+backend/azuma.db-wal
+backend/azuma.db-shm
+backend/.pytest_cache/
 frontend/node_modules/
 frontend/dist/
+frontend/.angular/
 __pycache__/
 *.pyc
 .DS_Store

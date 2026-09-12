@@ -1,9 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from .database import Base
+
+
+def utcnow() -> datetime:
+    """Naive UTC timestamp (stored without timezone in SQLite/PostgreSQL)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class FormAnalysis(Base):
@@ -12,9 +17,9 @@ class FormAnalysis(Base):
     __tablename__ = "form_analyses"
     id = Column(Integer, primary_key=True, index=True)
     target = Column(String, index=True)
-    status = Column(String, default="RUNNING")  # RUNNING, COMPLETED, ERROR
+    status = Column(String, default="RUNNING")  # PENDING, RUNNING, COMPLETED, ERROR, CANCELLED
     analysis_type = Column(String, default="form_scan")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
@@ -83,7 +88,7 @@ class SessionCookie(Base):
     path = Column(String, nullable=True)
     http_only = Column(Integer, default=0)
     secure = Column(Integer, default=0)
-    same_site = Column(String, nullable=True)  # Strict, Lax, None, None
+    same_site = Column(String, nullable=True)  # Strict, Lax, None
     max_age = Column(String, nullable=True)
 
     analysis = relationship("FormAnalysis", back_populates="session_cookies")

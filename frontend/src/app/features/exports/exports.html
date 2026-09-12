@@ -1,0 +1,64 @@
+<header class="section-header">
+  <div>
+    <h1 class="t-heading">{{ t('exports.title') }}</h1>
+    <span class="t-label">{{ t('exports.subtitle') }}</span>
+  </div>
+</header>
+
+@if (loading) {
+  <div class="t-label text-warning">[ LOADING... ]</div>
+}
+@if (error) {
+  <div class="t-label text-accent">[ERROR: {{ error }}]</div>
+}
+@if (notice) {
+  <div class="t-label text-success">{{ notice }}</div>
+}
+
+<section class="panel route-container">
+  <table>
+    <thead>
+      <tr>
+        <th class="t-label">#</th>
+        <th class="t-label">TARGET</th>
+        <th class="t-label">STATUS</th>
+        <th class="t-label">SERVER</th>
+        <th class="t-label">CLIENT</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of history; track item.id) {
+        <tr>
+          <td class="t-data">{{ item.id }}</td>
+          <td class="t-data exports-target">{{ item.target }}</td>
+          <td><app-status-badge [status]="item.status" /></td>
+          <td class="action-cell">
+            <a class="export-btn" [href]="serverJsonUrl(item.id)" rel="noopener">
+              {{ t('exports.server_json') }}
+            </a>
+            <a class="export-btn" [href]="serverCsvUrl(item.id)" rel="noopener">
+              {{ t('exports.server_csv') }}
+            </a>
+          </td>
+          <td class="action-cell">
+            <button type="button" class="export-btn" (click)="clientJson(item)">
+              {{ t('exports.client_json') }}
+            </button>
+            <button
+              type="button"
+              class="export-btn"
+              (click)="clientPdf(item)"
+              [disabled]="busyId !== null"
+            >
+              {{ t('exports.client_pdf') }}
+            </button>
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="5" class="empty-state t-label">{{ t('exports.empty') }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</section>

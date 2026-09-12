@@ -1,209 +1,45 @@
-<nav class="topbar">
-  <div class="brand">
-    <h1 class="t-heading">AZUMA</h1>
-    <span class="t-label">XWA - MODULE</span>
-  </div>
-  <div class="topbar-actions">
-    <span class="t-label status-label" [class.text-success]="backendOnline" [class.text-accent]="!backendOnline">
-      [{{ backendOnline ? 'BACKEND ONLINE' : 'BACKEND OFFLINE' }}]
-    </span>
-    <button type="button" class="theme-toggle-btn" (click)="toggleTheme()">
-      <span>{{ themeLabel() }}</span>
-    </button>
-  </div>
-</nav>
-
-<main class="container dot-grid-subtle">
-  <header class="section-header">
-    <div>
-      <h1 class="t-heading">FORM &amp; AUTH ANALYSIS</h1>
-      <span class="t-label">FORM DISCOVERY / OAUTH MAPPING / SESSION ANALYSIS</span>
+<div class="shell">
+  <aside class="sidenav">
+    <div class="brand">
+      <h1 class="t-heading">AZUMA</h1>
+      <span class="t-label">{{ t('app.tagline') }}</span>
     </div>
-  </header>
 
-  <section class="panel">
-    <label class="t-label" for="target-input">TARGET</label>
-    <form class="discover" (ngSubmit)="discover()">
-      <input
-        type="text"
-        id="target-input"
-        name="target"
-        class="input-field"
-        [(ngModel)]="target"
-        placeholder="https://example.com"
-        autocomplete="off"
-      />
-      <button type="submit" class="btn-primary" [disabled]="loading || !target.trim()">
-        {{ loading ? 'ANALYZING...' : 'ANALYZE' }}
+    <nav class="nav">
+      <a
+        routerLink="/"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        class="t-label nav-link"
+      >
+        [ {{ t('nav.analyzer') }} ]
+      </a>
+      <a routerLink="/history" routerLinkActive="active" class="t-label nav-link">
+        [ {{ t('nav.history') }} ]
+      </a>
+      <a routerLink="/exports" routerLinkActive="active" class="t-label nav-link">
+        [ {{ t('nav.exports') }} ]
+      </a>
+    </nav>
+
+    <div class="sidenav-foot">
+      <span
+        class="t-label status-label"
+        [class.text-success]="backendOnline"
+        [class.text-accent]="!backendOnline"
+      >
+        [{{ backendOnline ? 'BACKEND ONLINE' : 'BACKEND OFFLINE' }}]
+      </span>
+      <button type="button" class="side-btn" (click)="toggleLocale()">
+        {{ localeLabel() }}
       </button>
-    </form>
+      <button type="button" class="side-btn" (click)="toggleTheme()">
+        {{ themeLabel() }}
+      </button>
+    </div>
+  </aside>
 
-    @if (loading) {
-      <div class="t-label text-warning">[ LOADING... ]</div>
-    }
-    @if (error) {
-      <div class="t-label text-accent">[ERROR: {{ error }}]</div>
-    }
-  </section>
-
-  @if (analysis) {
-    <section class="results">
-      <header class="section-header results-header">
-        <div class="results-heading">
-          <div>
-            <h1 class="t-heading">ANALYSIS #{{ analysis.id }}</h1>
-            <span class="t-label">
-              {{ analysis.forms.length }} FORM(S) / {{ analysis.oauth_flows.length }} OAUTH FLOW(S) /
-              {{ analysis.session_cookies.length }} COOKIE(S)
-            </span>
-          </div>
-          <button type="button" class="export-btn" (click)="exportJson()">
-            <span>EXPORT JSON</span>
-          </button>
-        </div>
-      </header>
-
-      <h2 class="t-label section-title">FORMS</h2>
-      @for (form of analysis.forms; track form.id) {
-        <details class="nothing-accordion">
-          <summary>
-            <span class="method" [class.text-interactive]="form.method === 'GET'" [class.text-success]="form.method === 'POST'">
-              {{ form.method }}
-            </span>
-            <span class="t-label action">{{ form.action || '(NO ACTION)' }}</span>
-            <span class="t-label" [class.text-success]="form.is_secure" [class.text-warning]="!form.is_secure">
-              [{{ form.is_secure ? 'HTTPS' : 'HTTP' }}]
-            </span>
-            <span class="t-label">{{ csrfCount(form) }} CSRF</span>
-            <span class="t-label">{{ form.fields.length }} FIELD(S)</span>
-          </summary>
-          <div class="accordion-content">
-            <p class="t-label page-url">{{ form.page_url }}</p>
-            @if (form.redirect_chain) {
-              <p class="t-label page-url">REDIRECT CHAIN: {{ redirectSummary(form) }}</p>
-            }
-            <table>
-              <thead>
-                <tr>
-                  <th class="t-label">TYPE</th>
-                  <th class="t-label">NAME</th>
-                  <th class="t-label">REQUIRED</th>
-                  <th class="t-label">CSRF</th>
-                  <th class="t-label">AUTOCOMPLETE</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (field of form.fields; track field.id) {
-                  <tr>
-                    <td class="t-data">{{ field.input_type }}</td>
-                    <td class="t-data">{{ field.name }}</td>
-                    <td class="t-data" [class.text-success]="field.required">{{ field.required ? 'YES' : 'NO' }}</td>
-                    <td class="t-data" [class.text-warning]="field.is_csrf">{{ field.is_csrf ? 'TOKEN' : '—' }}</td>
-                    <td class="t-data">{{ field.autocomplete || '—' }}</td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="5" class="t-label">NO FIELDS</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </details>
-      } @empty {
-        <div class="empty-state t-label">[ NO FORMS DISCOVERED ]</div>
-      }
-
-      <h2 class="t-label section-title">OAUTH FLOWS</h2>
-      <section class="panel">
-        @if (analysis.oauth_flows.length > 0) {
-          <table>
-            <thead>
-              <tr>
-                <th class="t-label">ENDPOINT</th>
-                <th class="t-label">FLOW</th>
-                <th class="t-label">CLIENT</th>
-                <th class="t-label">STATE</th>
-                <th class="t-label">WEAKNESS</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (flow of analysis.oauth_flows; track flow.id) {
-                <tr>
-                  <td class="t-data">{{ flow.endpoint }}</td>
-                  <td class="t-data">{{ flow.flow_type }}</td>
-                  <td class="t-data">{{ flow.client_id || '—' }}</td>
-                  <td class="t-data" [class.text-success]="flow.uses_state" [class.text-accent]="!flow.uses_state">
-                    {{ flow.uses_state ? 'YES' : 'NO' }}
-                  </td>
-                  <td class="t-data" [class.text-warning]="flow.weakness">{{ flow.weakness || '—' }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        } @else {
-          <div class="empty-state t-label">[ NO OAUTH FLOWS DETECTED ]</div>
-        }
-      </section>
-
-      <h2 class="t-label section-title">SESSION COOKIES</h2>
-      <section class="panel">
-        @if (analysis.session_cookies.length > 0) {
-          <table>
-            <thead>
-              <tr>
-                <th class="t-label">NAME</th>
-                <th class="t-label">VALUE</th>
-                <th class="t-label">HTTPONLY</th>
-                <th class="t-label">SECURE</th>
-                <th class="t-label">SAMESITE</th>
-                <th class="t-label">MAX-AGE</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (cookie of analysis.session_cookies; track cookie.id) {
-                <tr>
-                  <td class="t-data">{{ cookie.name }}</td>
-                  <td class="t-data">{{ cookie.value_preview }}</td>
-                  <td class="t-data" [class.text-success]="cookie.http_only" [class.text-accent]="!cookie.http_only">
-                    {{ cookie.http_only ? 'YES' : 'NO' }}
-                  </td>
-                  <td class="t-data" [class.text-success]="cookie.secure" [class.text-accent]="!cookie.secure">
-                    {{ cookie.secure ? 'YES' : 'NO' }}
-                  </td>
-                  <td class="t-data">{{ cookie.same_site || '—' }}</td>
-                  <td class="t-data">{{ cookie.max_age || '—' }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        } @else {
-          <div class="empty-state t-label">[ NO SESSION COOKIES PROFILED ]</div>
-        }
-      </section>
-    </section>
-  }
-
-  <section class="history">
-    <header class="section-header results-header">
-      <div>
-        <h1 class="t-heading">HISTORY</h1>
-        <span class="t-label">RECENT ANALYSES</span>
-      </div>
-    </header>
-    @if (history.length > 0) {
-      @for (item of history; track item.id) {
-        <button type="button" class="history-item" (click)="loadAnalysis(item.id)">
-          <span class="t-data">#{{ item.id }}</span>
-          <span class="t-data history-target">{{ item.target }}</span>
-          <span class="t-data" [class.text-success]="item.status === 'COMPLETED'" [class.text-accent]="item.status === 'ERROR'">
-            {{ item.status }}
-          </span>
-          <span class="t-label">{{ item.form_count }}F / {{ item.oauth_flow_count }}O / {{ item.session_cookie_count }}C</span>
-        </button>
-      }
-    } @else {
-      <div class="empty-state t-label">[ NO ANALYSES YET ]</div>
-    }
-  </section>
-</main>
+  <main class="content dot-grid-subtle">
+    <router-outlet />
+  </main>
+</div>

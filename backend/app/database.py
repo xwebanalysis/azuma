@@ -1,13 +1,13 @@
 import os
 import time
-from sqlalchemy import create_engine, event
-from sqlalchemy import text
-from sqlalchemy.orm import sessionmaker, declarative_base
 
-DB_DRIVER = os.getenv("DB_DRIVER", "postgresql")
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-if DB_DRIVER == "sqlite":
-    DB_PATH = os.getenv("DB_PATH", "./azuma.db")
+DB_DRIVER = os.getenv("DB_DRIVER", "sqlite").strip().lower()
+DB_PATH = os.getenv("DB_PATH", "./azuma.db")
+
+if DB_DRIVER in ("sqlite", "sqlite3"):
     DATABASE_URL = f"sqlite:///{DB_PATH}"
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
@@ -16,8 +16,10 @@ if DB_DRIVER == "sqlite":
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
         cursor.execute("PRAGMA journal_mode = WAL")
+        cursor.execute("PRAGMA busy_timeout = 5000")
         cursor.close()
-else:
+
+elif DB_DRIVER in ("postgresql", "postgres"):
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASS = os.getenv("DB_PASS", "postgres")
     DB_HOST = os.getenv("DB_HOST", "db")
@@ -27,13 +29,28 @@ else:
 
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
+else:
+    raise ValueError(f"Unsupported DB_DRIVER '{DB_DRIVER}' (use 'sqlite' or 'postgresql').")
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+IS_SQLITE = DB_DRIVER in ("sqlite", "sqlite3")
+
+
+def ping() -> bool:
+    """Return True when the database answers a trivial query."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
+
 
 def wait_for_db(max_retries: int = 30, retry_delay: float = 1.5):
-    if DB_DRIVER == "sqlite":
+    if IS_SQLITE:
         return
 
     last_error = None
