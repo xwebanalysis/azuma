@@ -1,0 +1,112 @@
+@if (loading) {
+  <div class="t-label text-warning">[ LOADING... ]</div>
+}
+@if (error) {
+  <div class="t-label text-accent">[ERROR: {{ error }}]</div>
+}
+
+@if (analysis) {
+  <section class="detail route-container">
+    <header class="detail-hero">
+      <div class="hero-main">
+        @if (routeView) {
+          <a class="t-label back-link" routerLink="/history">[ &lt; {{ t('action.back') }} ]</a>
+        }
+        <span class="t-label">#{{ analysis.id }} / {{ analysis.target }}</span>
+        <div class="hero-number t-display-xl">{{ analysis.forms.length }}</div>
+        <span class="t-label">{{ t('metric.forms') }} — {{ analysis.status }}</span>
+      </div>
+      <div class="hero-side">
+        <app-status-badge [status]="analysis.status" />
+        @if (analysis.status === 'COMPLETED') {
+          <app-export-actions [analysis]="analysis" />
+        }
+      </div>
+    </header>
+
+    <div class="metric-grid">
+      <app-metric-card
+        [label]="t('metric.forms')"
+        [value]="counts().forms"
+        [status]="counts().forms ? 'info' : 'pass'"
+      />
+      <app-metric-card
+        [label]="t('metric.fields')"
+        [value]="counts().fields"
+        [status]="counts().fields ? 'info' : 'pass'"
+      />
+      <app-metric-card
+        [label]="t('metric.oauth')"
+        [value]="counts().oauth"
+        [status]="counts().oauth ? 'medium' : 'pass'"
+      />
+      <app-metric-card
+        [label]="t('metric.cookies')"
+        [value]="counts().cookies"
+        [status]="counts().cookies ? 'low' : 'pass'"
+      />
+    </div>
+
+    <h2 class="t-label section-title">{{ t('detail.forms') }} ({{ analysis.forms.length }})</h2>
+    @if (analysis.forms.length > 0) {
+      @for (form of analysis.forms; track form.id) {
+        <details class="nothing-accordion">
+          <summary>
+            <span
+              class="method"
+              [class.text-interactive]="form.method === 'GET'"
+              [class.text-success]="form.method === 'POST'"
+            >
+              {{ form.method }}
+            </span>
+            <span class="t-label action">{{ form.action || t('detail.no_action') }}</span>
+            <span
+              class="t-label"
+              [class.text-success]="form.is_secure"
+              [class.text-warning]="!form.is_secure"
+            >
+              [{{ form.is_secure ? 'HTTPS' : 'HTTP' }}]
+            </span>
+            <span class="t-label">{{ csrfCount(form) }} {{ t('detail.csrf') }}</span>
+            <span class="t-label">{{ form.fields.length }} {{ t('detail.fields') }}</span>
+          </summary>
+          <div class="accordion-content">
+            <p class="t-label page-url">{{ form.page_url }}</p>
+            @if (form.redirect_chain) {
+              <p class="t-label page-url">
+                {{ t('detail.redirect') }}: {{ redirectSummary(form) }}
+              </p>
+            }
+            <app-detail-table
+              [columns]="fieldColumns"
+              [rows]="form.fields"
+              emptyText="[ NO FIELDS ]"
+            />
+          </div>
+        </details>
+      }
+    } @else {
+      <div class="empty-state t-label">{{ t('detail.no_forms') }}</div>
+    }
+
+    <h2 class="t-label section-title">{{ t('detail.oauth') }} ({{ analysis.oauth_flows.length }})</h2>
+    <section class="panel">
+      <app-detail-table
+        [columns]="oauthColumns"
+        [rows]="analysis.oauth_flows"
+        [emptyText]="t('detail.no_oauth')"
+      />
+    </section>
+
+    <h2 class="t-label section-title">
+      {{ t('detail.cookies') }} ({{ analysis.session_cookies.length }})
+    </h2>
+    <section class="panel">
+      <app-detail-table
+        [columns]="cookieColumns"
+        [rows]="analysis.session_cookies"
+        [emptyText]="t('detail.no_cookies')"
+      />
+    </section>
+  </section>
+}

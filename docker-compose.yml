@@ -3,7 +3,7 @@ services:
     build:
       context: ./frontend
     ports:
-      - "4200:4200"
+      - "4230:4230"
     volumes:
       - ./frontend:/app/
       - /app/node_modules/
@@ -14,10 +14,11 @@ services:
     build:
       context: ./backend
     ports:
-      - "8000:8000"
+      - "8030:8030"
     volumes:
       - ./backend/app:/app/app
     environment:
+      - DB_DRIVER=postgresql
       - DB_HOST=db
       - DB_NAME=azuma
       - DB_USER=postgres
@@ -33,7 +34,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=azuma
     ports:
-      - "5432:5432"
+      - "5443:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:

@@ -1,105 +1,55 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { CommonModule } from '@angular/common';
+import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
-import { ApiService, AnalysisListItem, Form, FormAnalysis } from './services/api.service';
-import { ThemeService } from './services/theme.service';
+import { ApiService } from './core/api.service';
+import { I18nService } from './core/i18n.service';
+import { ThemeService } from './core/theme.service';
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, CommonModule],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App implements OnInit {
   private readonly api = inject(ApiService);
   private readonly theme = inject(ThemeService);
+  private readonly i18n = inject(I18nService);
+  private readonly cdr = inject(ChangeDetectorRef);
 
-  protected target = '';
-  protected loading = false;
-  protected error: string | null = null;
   protected backendOnline = false;
-  protected analysis: FormAnalysis | null = null;
-  protected history: AnalysisListItem[] = [];
 
   ngOnInit(): void {
     this.theme.initTheme();
     this.api.health().subscribe({
       next: () => {
         this.backendOnline = true;
-        this.loadHistory();
+        this.cdr.markForCheck();
       },
-      error: () => (this.backendOnline = false),
+      error: () => {
+        this.backendOnline = false;
+        this.cdr.markForCheck();
+      },
     });
   }
 
-  toggleTheme(): void {
+  protected t(key: string): string {
+    return this.i18n.t(key);
+  }
+
+  protected toggleTheme(): void {
     this.theme.toggleTheme();
   }
 
-  themeLabel(): string {
+  protected themeLabel(): string {
     return this.theme.nextThemeLabel();
   }
 
-  discover(): void {
-    const target = this.target.trim();
-    if (!target || this.loading) {
-      return;
-    }
-    this.loading = true;
-    this.error = null;
-    this.api.discoverForms(target).subscribe({
-      next: (response) => {
-        this.analysis = response.analysis;
-        this.loading = false;
-        this.loadHistory();
-      },
-      error: (err) => {
-        this.error = err.error?.detail ?? 'Failed to reach the backend.';
-        this.loading = false;
-      },
-    });
+  protected toggleLocale(): void {
+    this.i18n.toggle();
   }
 
-  loadHistory(): void {
-    this.api.listAnalyses().subscribe({
-      next: (items) => (this.history = items),
-      error: () => undefined,
-    });
-  }
-
-  loadAnalysis(id: number): void {
-    this.error = null;
-    this.api.getAnalysis(id).subscribe({
-      next: (analysis) => (this.analysis = analysis),
-      error: () => (this.error = 'Failed to load analysis.'),
-    });
-  }
-
-  exportJson(): void {
-    if (!this.analysis) {
-      return;
-    }
-    const payload = JSON.stringify(this.analysis, null, 2);
-    const blob = new Blob([payload], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `azuma-analysis-${this.analysis.id}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  csrfCount(form: Form): number {
-    return form.fields.filter((f) => f.is_csrf).length;
-  }
-
-  redirectSummary(form: Form): string {
-    try {
-      const chain: { url: string; status: number }[] = JSON.parse(form.redirect_chain ?? '[]');
-      return chain.map((hop) => `${hop.status} ${hop.url}`).join(' → ');
-    } catch {
-      return '';
-    }
+  protected localeLabel(): string {
+    return this.i18n.locale().toUpperCase();
   }
 }

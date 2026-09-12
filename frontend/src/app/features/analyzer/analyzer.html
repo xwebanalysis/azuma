@@ -1,0 +1,59 @@
+<header class="section-header">
+  <div>
+    <h1 class="t-heading">{{ t('dashboard.title') }}</h1>
+    <span class="t-label">{{ t('dashboard.subtitle') }}</span>
+  </div>
+</header>
+
+<section class="panel control-panel route-container">
+  <label class="t-label" for="target-input">{{ t('target.label') }}</label>
+  <div class="control-row">
+    <input
+      type="text"
+      id="target-input"
+      name="target"
+      class="input-field"
+      [(ngModel)]="target"
+      [placeholder]="t('target.placeholder')"
+      [disabled]="loading || liveRunning"
+      autocomplete="off"
+    />
+    <button type="button" class="btn-primary" (click)="analyze()" [disabled]="!canRun()">
+      {{ loading ? t('action.analyzing') : t('action.analyze') }}
+    </button>
+    <button type="button" class="btn-primary" (click)="runLive()" [disabled]="!canRun()">
+      {{ t('action.live') }}
+    </button>
+    @if (liveRunning) {
+      <button type="button" class="btn-ghost t-label" (click)="cancel()">
+        [ {{ t('action.cancel') }} ]
+      </button>
+    }
+  </div>
+
+  @if (loading || liveRunning) {
+    <div class="t-label text-warning">[ LOADING... ]</div>
+  }
+  @if (error) {
+    <div class="t-label text-accent">[ERROR: {{ error }}]</div>
+  }
+</section>
+
+@if (liveRunning || terminalLines.length > 0) {
+  <div class="phase-row">
+    @for (phase of phases; track phase) {
+      <span class="t-label phase" [class]="'phase-' + phaseState[phase]">
+        {{ t('phase.' + phase) }}
+      </span>
+    }
+  </div>
+  <app-terminal
+    [lines]="terminalLines"
+    [title]="t('terminal.title')"
+    [emptyText]="t('terminal.empty')"
+  />
+}
+
+@if (analysis) {
+  <app-analysis-detail [analysis]="analysis" />
+}
