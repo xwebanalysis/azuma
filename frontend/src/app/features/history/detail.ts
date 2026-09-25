@@ -5,10 +5,27 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService, Form, FormAnalysis } from '../../core/api.service';
 import { ExportService } from '../../core/export.service';
 import { I18nService } from '../../core/i18n.service';
+import {
+  XwaChartColorKey,
+  XwaChartComponent,
+  XwaChartDatum,
+} from '../../shared/charts/xwa-chart.component';
 import { DetailColumn, DetailTableComponent } from '../../shared/detail-table/detail-table';
 import { ExportActionsComponent } from '../../shared/export-actions/export-actions';
 import { MetricCardComponent } from '../../shared/metric-card/metric-card';
 import { StatusBadgeComponent } from '../../shared/status-badge/status-badge';
+
+/** xwa-sdk severity → chart color (CHART-SPEC: medium uses neutral-strong). */
+const SEVERITY_COLORS: Record<string, XwaChartColorKey> = {
+  critical: 'critical',
+  high: 'high',
+  medium: 'neutral-strong',
+  low: 'low',
+  info: 'info',
+};
+
+/** Weakness severities only (informational observations excluded from the donut). */
+const WEAKNESS_SEVERITIES: readonly XwaChartColorKey[] = ['critical', 'high', 'medium', 'low'];
 
 @Component({
   selector: 'app-analysis-detail',
@@ -20,6 +37,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge/status-badge';
     ExportActionsComponent,
     MetricCardComponent,
     StatusBadgeComponent,
+    XwaChartComponent,
   ],
   templateUrl: './detail.html',
   styleUrl: './detail.scss',
@@ -64,6 +82,16 @@ export class AnalysisDetailComponent implements OnInit {
     { key: 'secure', label: 'SECURE' },
     { key: 'same_site', label: 'SAMESITE' },
     { key: 'max_age', label: 'MAX-AGE' },
+  ];
+
+  protected readonly findingColumns: DetailColumn[] = [
+    { key: 'kind', label: 'KIND' },
+    { key: 'severity', label: 'SEVERITY' },
+    { key: 'title', label: 'TITLE' },
+    { key: 'description', label: 'DESCRIPTION' },
+    { key: 'method', label: 'METHOD' },
+    { key: 'csrf_present', label: 'CSRF' },
+    { key: 'target_url', label: 'TARGET' },
   ];
 
   ngOnInit(): void {
@@ -114,5 +142,55 @@ export class AnalysisDetailComponent implements OnInit {
       oauth: this.analysis?.oauth_flows.length ?? 0,
       cookies: this.analysis?.session_cookies.length ?? 0,
     };
+  }
+
+  protected findingCount(): number {
+    return this.analysis?.session_findings.length ?? 0;
+  }
+
+  /** CHART-SPEC azuma: one h-bar per discovered form, sized by field count. */
+  protected fieldsPerFormData(): XwaChartDatum[] {
+    return (this.analysis?.forms ?? []).map((form, index) => ({
+      label: form.action ?? `FORM #${index + 1}`,
+      value: form.fields.length,
+    }));
+  }
+
+  /** CHART-SPEC azuma: cookie flag present counts (HttpOnly/Secure/SameSite). */
+  protected cookieFlagsData(): XwaChartDatum[] {
+    const cookies = this.analysis?.session_cookies ?? [];
+    return [
+      {
+        label: 'HTTPONLY',
+        value: cookies.filter((cookie) => cookie.http_only).length,
+        color: 'interactive' as XwaChartColorKey,
+      },
+      {
+        label: 'SECURE',
+        value: cookies.filter((cookie) => cookie.secure).length,
+        color: 'success' as XwaChartColorKey,
+      },
+      {
+        label: 'SAMESITE',
+        value: cookies.filter((cookie) => !!cookie.same_site).length,
+        color: 'warning' as XwaChartColorKey,
+      },
+    ];
+  }
+
+  /** CHART-SPEC azuma: weakness severity donut (xwa-sdk severities, no info). */
+  protected weaknessSeverityData(): XwaChartDatum[] {
+    const counts = new Map<string, number>();
+    for (const finding of this.analysis?.session_findings ?? []) {
+      const severity = String(finding.severity ?? '').toLowerCase();
+      if (WEAKNESS_SEVERITIES.includes(severity as XwaChartColorKey)) {
+        counts.set(severity, (counts.get(severity) ?? 0) + 1);
+      }
+    }
+    return WEAKNESS_SEVERITIES.filter((severity) => counts.has(severity)).map((severity) => ({
+      label: severity.toUpperCase(),
+      value: counts.get(severity) ?? 0,
+      color: SEVERITY_COLORS[severity],
+    }));
   }
 }

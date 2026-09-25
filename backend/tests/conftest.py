@@ -96,6 +96,18 @@ def fake_analyzer(monkeypatch):
                     max_age="3600",
                 )
             ],
+            "session_findings": [
+                analyzer.SessionFindingData(
+                    kind="logout",
+                    severity="low",
+                    title="Logout uses state-changing GET",
+                    description="Logout endpoint https://example.com/logout is reachable via GET (link).",
+                    target_url="https://example.com/logout",
+                    method="GET",
+                    csrf_present=None,
+                    evidence={"source": "link", "method": "GET"},
+                )
+            ],
         }
 
     monkeypatch.setattr(analyzer, "analyze_target", fake_analyze)

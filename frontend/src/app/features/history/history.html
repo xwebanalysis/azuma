@@ -16,6 +16,28 @@
 }
 
 @if (history.length > 0) {
+  <section class="panel charts-panel">
+    <div class="charts-grid">
+      <div class="chart-block">
+        <h2 class="t-label">{{ t('chart.scans_per_day') }}</h2>
+        <app-xwa-chart
+          kind="line"
+          [data]="scansPerDayData()"
+          [title]="t('chart.scans_per_day')"
+        />
+      </div>
+      <div class="chart-block">
+        <h2 class="t-label">{{ t('chart.status') }}</h2>
+        <app-xwa-chart
+          kind="donut"
+          [data]="statusChartData()"
+          [title]="t('chart.status')"
+          unit="SCANS"
+        />
+      </div>
+    </div>
+  </section>
+
   <div class="history-list route-container">
     @for (item of history; track item.id) {
       <div class="history-item">

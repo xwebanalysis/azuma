@@ -71,12 +71,26 @@ const analysis = {
       max_age: '3600',
     },
   ],
+  session_findings: [
+    {
+      id: 1,
+      kind: 'logout',
+      category: 'session',
+      severity: 'low',
+      title: 'Logout uses state-changing GET',
+      description: 'Logout endpoint is reachable via GET.',
+      target_url: 'https://example.com/logout',
+      method: 'GET',
+      csrf_present: null,
+      evidence: '{"source": "link", "method": "GET"}',
+    },
+  ],
 } as unknown as FormAnalysis;
 
 describe('analysisToCsv', () => {
-  it('should emit one row per field plus OAuth and cookie rows', () => {
+  it('should emit one row per field plus OAuth, cookie and finding rows', () => {
     const lines = analysisToCsv(analysis).split('\n');
-    expect(lines).toHaveLength(5);
+    expect(lines).toHaveLength(6);
     expect(lines[0]).toContain('kind,analysis_id,target,page_url,method,action');
     expect(lines[1]).toContain('form,5,https://example.com,https://example.com/login,POST,/login');
     expect(lines[1]).toContain('email,email,1,0,email');
@@ -85,6 +99,8 @@ describe('analysisToCsv', () => {
     expect(lines[3]).toContain('authorization_code,client-1');
     expect(lines[4]).toContain('session_cookie,5,https://example.com');
     expect(lines[4]).toContain('sessionid,example.com,/,1,1,Lax,3600');
+    expect(lines[5]).toContain('session_finding,5,https://example.com');
+    expect(lines[5]).toContain('logout,low,Logout uses state-changing GET');
   });
 
   it('should emit a form row even when the form has no fields', () => {
@@ -93,6 +109,7 @@ describe('analysisToCsv', () => {
       forms: [{ ...analysis.forms[0], fields: [] }],
       oauth_flows: [],
       session_cookies: [],
+      session_findings: [],
     }).split('\n');
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain('form,5,https://example.com');

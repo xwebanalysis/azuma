@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 
@@ -29,7 +29,7 @@ const PHASES: readonly PhaseName[] = ['connect', 'fetch', 'forms', 'oauth', 'coo
   templateUrl: './analyzer.html',
   styleUrl: './analyzer.scss',
 })
-export class AnalyzerComponent implements OnDestroy {
+export class AnalyzerComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly live = inject(LiveService);
   private readonly i18n = inject(I18nService);
@@ -47,8 +47,35 @@ export class AnalyzerComponent implements OnDestroy {
 
   private subscription: Subscription | null = null;
 
+  ngOnInit(): void {
+    this.loadLatest();
+  }
+
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
+  }
+
+  /** Restore the most recent COMPLETED analysis so result charts have data. */
+  private loadLatest(): void {
+    this.api.listAnalyses().subscribe({
+      next: (items) => {
+        const latest = items.find((item) => item.status === 'COMPLETED');
+        if (!latest) {
+          return;
+        }
+        this.api.getAnalysis(latest.id).subscribe({
+          next: (analysis) => {
+            this.analysis = analysis;
+            this.appendLine(
+              `RESTORED #${analysis.id} target=${analysis.target} status=${analysis.status}`,
+            );
+            this.cdr.markForCheck();
+          },
+          error: () => undefined,
+        });
+      },
+      error: () => undefined,
+    });
   }
 
   protected t(key: string): string {
@@ -182,6 +209,12 @@ export class AnalyzerComponent implements OnDestroy {
         this.markPhase('cookies');
         this.appendLine(
           `+ COOKIE ${payload?.name ?? ''} secure=${payload?.secure ? 'YES' : 'NO'}`,
+        );
+        break;
+      case 'session_finding':
+        this.markPhase('cookies');
+        this.appendLine(
+          `+ SESSION [${String(payload?.severity ?? '?').toUpperCase()}] ${payload?.title ?? ''}`,
         );
         break;
       default:

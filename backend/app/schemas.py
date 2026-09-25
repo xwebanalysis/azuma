@@ -57,6 +57,21 @@ class SessionCookieRead(BaseModel):
     max_age: Optional[str] = None
 
 
+class SessionFindingRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: Optional[str] = None
+    category: str = "session"
+    severity: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    target_url: Optional[str] = None
+    method: Optional[str] = None
+    csrf_present: Optional[bool] = None
+    evidence: Optional[str] = None
+
+
 class FormAnalysisRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,6 +86,7 @@ class FormAnalysisRead(BaseModel):
     forms: List[FormRead] = []
     oauth_flows: List[OAuthFlowRead] = []
     session_cookies: List[SessionCookieRead] = []
+    session_findings: List[SessionFindingRead] = []
 
 
 class DiscoverRequest(BaseModel):
@@ -82,6 +98,7 @@ class DiscoverResponse(BaseModel):
     form_count: int
     oauth_flow_count: int
     session_cookie_count: int
+    session_finding_count: int
 
 
 class AnalysisListItem(BaseModel):
@@ -93,3 +110,4 @@ class AnalysisListItem(BaseModel):
     form_count: int
     oauth_flow_count: int
     session_cookie_count: int
+    session_finding_count: int

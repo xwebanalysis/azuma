@@ -47,6 +47,36 @@
       />
     </div>
 
+    <section class="panel charts-panel">
+      <div class="charts-grid">
+        <div class="chart-block">
+          <h2 class="t-label">{{ t('chart.fields_per_form') }}</h2>
+          <app-xwa-chart
+            kind="h-bars"
+            [data]="fieldsPerFormData()"
+            [title]="t('chart.fields_per_form')"
+          />
+        </div>
+        <div class="chart-block">
+          <h2 class="t-label">{{ t('chart.cookie_flags') }}</h2>
+          <app-xwa-chart
+            kind="h-bars"
+            [data]="cookieFlagsData()"
+            [title]="t('chart.cookie_flags')"
+          />
+        </div>
+        <div class="chart-block">
+          <h2 class="t-label">{{ t('chart.weakness_severity') }}</h2>
+          <app-xwa-chart
+            kind="donut"
+            [data]="weaknessSeverityData()"
+            [title]="t('chart.weakness_severity')"
+            unit="FINDINGS"
+          />
+        </div>
+      </div>
+    </section>
+
     <h2 class="t-label section-title">{{ t('detail.forms') }} ({{ analysis.forms.length }})</h2>
     @if (analysis.forms.length > 0) {
       @for (form of analysis.forms; track form.id) {
@@ -106,6 +136,17 @@
         [columns]="cookieColumns"
         [rows]="analysis.session_cookies"
         [emptyText]="t('detail.no_cookies')"
+      />
+    </section>
+
+    <h2 class="t-label section-title">
+      {{ t('detail.findings') }} ({{ findingCount() }})
+    </h2>
+    <section class="panel">
+      <app-detail-table
+        [columns]="findingColumns"
+        [rows]="analysis.session_findings"
+        [emptyText]="t('detail.no_findings')"
       />
     </section>
   </section>

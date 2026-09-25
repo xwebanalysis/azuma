@@ -51,6 +51,19 @@ export interface SessionCookie {
   max_age: string | null;
 }
 
+export interface SessionFinding {
+  id: number;
+  kind: string | null;
+  category: string;
+  severity: string | null;
+  title: string | null;
+  description: string | null;
+  target_url: string | null;
+  method: string | null;
+  csrf_present: boolean | null;
+  evidence: string | null;
+}
+
 export interface FormAnalysis {
   id: number;
   target: string;
@@ -63,6 +76,7 @@ export interface FormAnalysis {
   forms: Form[];
   oauth_flows: OAuthFlow[];
   session_cookies: SessionCookie[];
+  session_findings: SessionFinding[];
 }
 
 export interface AnalysisListItem {
@@ -74,6 +88,7 @@ export interface AnalysisListItem {
   form_count: number;
   oauth_flow_count: number;
   session_cookie_count: number;
+  session_finding_count: number;
 }
 
 export interface DiscoverResponse {
@@ -81,6 +96,7 @@ export interface DiscoverResponse {
   form_count: number;
   oauth_flow_count: number;
   session_cookie_count: number;
+  session_finding_count: number;
 }
 
 export interface HealthResponse {
@@ -120,6 +136,9 @@ export interface ItemFoundPayload {
   flow_type?: string | null;
   name?: string | null;
   secure?: boolean;
+  severity?: string;
+  title?: string | null;
+  target_url?: string | null;
 }
 
 export interface LiveErrorPayload {

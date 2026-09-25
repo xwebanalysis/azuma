@@ -27,6 +27,7 @@ class FormAnalysis(Base):
     forms = relationship("Form", back_populates="analysis", cascade="all, delete-orphan")
     oauth_flows = relationship("OAuthFlow", back_populates="analysis", cascade="all, delete-orphan")
     session_cookies = relationship("SessionCookie", back_populates="analysis", cascade="all, delete-orphan")
+    session_findings = relationship("SessionFinding", back_populates="analysis", cascade="all, delete-orphan")
 
 
 class Form(Base):
@@ -92,3 +93,26 @@ class SessionCookie(Base):
     max_age = Column(String, nullable=True)
 
     analysis = relationship("FormAnalysis", back_populates="session_cookies")
+
+
+class SessionFinding(Base):
+    """A session-analysis finding (xwa-sdk Finding, category "session").
+
+    Severity uses the xwa-sdk unified scale (pass/info/low/medium/high/critical).
+    """
+
+    __tablename__ = "session_findings"
+    id = Column(Integer, primary_key=True, index=True)
+    analysis_id = Column(Integer, ForeignKey("form_analyses.id", ondelete="CASCADE"))
+
+    kind = Column(String, nullable=True)  # logout | domain_scope
+    category = Column(String, default="session")
+    severity = Column(String, nullable=True)
+    title = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    target_url = Column(Text, nullable=True)
+    method = Column(String, nullable=True)  # GET | POST | None (links)
+    csrf_present = Column(Integer, nullable=True)  # 0/1/None
+    evidence = Column(Text, nullable=True)  # JSON object
+
+    analysis = relationship("FormAnalysis", back_populates="session_findings")

@@ -1,5 +1,6 @@
 """Analysis core — phase 2: form discovery with CSRF detection, redirect tracing,
-OAuth flow mapping and session cookie profiling."""
+OAuth flow mapping, session cookie profiling, logout behavior and cookie-domain
+scope findings (passive single-fetch model)."""
 
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from typing import List
 
 import httpx
 from bs4 import BeautifulSoup
+from xwa_sdk import map_severity
 
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -56,13 +58,16 @@ class FormData:
     redirect_chain: List[dict] = field(default_factory=list)
 
 
-def _looks_like_csrf(field: FormFieldData) -> bool:
-    name = field.name or ""
-    if CSRF_NAME_RE.search(name):
+def _field_is_csrf(name: str | None, input_type: str | None, value: str | None) -> bool:
+    if name and CSRF_NAME_RE.search(name):
         return True
-    if field.input_type == "hidden" and field.value and CSRF_VALUE_RE.match(field.value):
+    if input_type == "hidden" and value and CSRF_VALUE_RE.match(value):
         return True
     return False
+
+
+def _looks_like_csrf(field: FormFieldData) -> bool:
+    return _field_is_csrf(field.name, field.input_type, field.value)
 
 
 def parse_forms(final_url: str, html: str) -> List[FormData]:
@@ -325,6 +330,209 @@ def profile_session_cookies(response: httpx.Response) -> List[SessionCookieData]
     return cookies
 
 
+# ── Session findings (logout behavior + cookie domain scope) ────────────────
+# Passive single-fetch observations reported as xwa-sdk Findings with
+# category "session". Stateful fixation detection is intentionally out of scope
+# (see ROADMAP.md — requires pre/post-login requests).
+
+SESSION_FINDING_CATEGORY = "session"
+
+LOGOUT_URL_RE = re.compile(
+    r"(?:[/=?&]|^)(?:logout|signout|sign-out|sign_out|logoff|signoff|salir|cerrar[-_]?sesion)"
+    r"(?:[/?#.&]|$)",
+    re.IGNORECASE,
+)
+
+
+@dataclass
+class SessionFindingData:
+    kind: str  # "logout" | "domain_scope"
+    severity: str  # xwa-sdk unified severity (info/low/medium/high/critical)
+    title: str
+    description: str
+    category: str = SESSION_FINDING_CATEGORY
+    target_url: str | None = None
+    method: str | None = None
+    csrf_present: bool | None = None
+    evidence: dict | None = None
+
+    def __post_init__(self) -> None:
+        # Validate against the xwa-sdk unified severity scale.
+        self.severity = map_severity("azuma", self.severity)
+
+
+def _is_logout_url(url: str | None) -> bool:
+    return bool(url) and bool(LOGOUT_URL_RE.search(url))
+
+
+def _control_csrf(soup: BeautifulSoup, tag) -> bool:
+    """Whether a form control carries a CSRF token (mirrors parse_forms)."""
+    name = tag.get("name")
+    input_type = (tag.get("type") or "text") if tag.name == "input" else None
+    return _field_is_csrf(name, input_type, tag.get("value"))
+
+
+def detect_logout_behavior(html: str, page_url: str) -> List[SessionFindingData]:
+    """Passively detect logout endpoints in forms and links.
+
+    - GET logout (link or form) → weakness: state-changing GET.
+    - POST logout without a CSRF token → weakness: logout CSRF.
+    - POST logout with a CSRF token → positive informational report.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    findings: List[SessionFindingData] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _add(kind_url: str, method: str, csrf: bool | None, source: str) -> None:
+        key = (kind_url, method)
+        if key in seen:
+            return
+        seen.add(key)
+
+        if method == "GET" or csrf is None:
+            findings.append(
+                SessionFindingData(
+                    kind="logout",
+                    severity="low",
+                    title="Logout uses state-changing GET",
+                    description=(
+                        f"Logout endpoint {kind_url} is reachable via GET "
+                        f"({source}): state-changing logout can be triggered by "
+                        "prefetching, crawlers or an attacker-supplied link and "
+                        "leaks the URL in logs and Referer headers."
+                    ),
+                    target_url=kind_url,
+                    method=method,
+                    csrf_present=csrf,
+                    evidence={"source": source, "method": method, "csrf_present": csrf},
+                )
+            )
+        elif not csrf:
+            findings.append(
+                SessionFindingData(
+                    kind="logout",
+                    severity="medium",
+                    title="Logout form without CSRF token",
+                    description=(
+                        f"Logout endpoint {kind_url} is POSTed from a form without "
+                        "a CSRF token: an attacker can force session invalidation "
+                        "(logout CSRF)."
+                    ),
+                    target_url=kind_url,
+                    method=method,
+                    csrf_present=False,
+                    evidence={"source": source, "method": method, "csrf_present": False},
+                )
+            )
+        else:
+            findings.append(
+                SessionFindingData(
+                    kind="logout",
+                    severity="info",
+                    title="Logout form with CSRF protection",
+                    description=(
+                        f"Logout endpoint {kind_url} is POSTed from a form carrying "
+                        "a CSRF token."
+                    ),
+                    target_url=kind_url,
+                    method=method,
+                    csrf_present=True,
+                    evidence={"source": source, "method": method, "csrf_present": True},
+                )
+            )
+
+    for form in soup.find_all("form"):
+        action = form.get("action") or None
+        if not _is_logout_url(action):
+            continue
+        method = (form.get("method") or "get").upper()
+        url = _absolute(page_url, action) if action else page_url
+        csrf = any(
+            _control_csrf(soup, control)
+            for control in form.find_all(["input", "textarea", "select"])
+        )
+        _add(url, method, csrf if method == "POST" else None, "form")
+
+    for link in soup.find_all("a"):
+        href = link.get("href") or None
+        if not _is_logout_url(href):
+            continue
+        url = _absolute(page_url, href)
+        _add(url, "GET", None, "link")
+
+    return findings
+
+
+def analyze_cookie_domain_scope(
+    cookies: List["SessionCookieData"], host: str
+) -> List[SessionFindingData]:
+    """Map Set-Cookie Domain attributes against the response host.
+
+    A Domain attribute broader than the host (leading dot or parent domain)
+    widens session persistence to the covered subdomains and is reported as a
+    weakness with the exact scope in the evidence.
+    """
+    findings: List[SessionFindingData] = []
+    host = (host or "").lower().strip(".")
+    seen: set[str] = set()
+
+    for cookie in cookies:
+        raw = (cookie.domain or "").strip().lower()
+        if not raw:
+            continue
+        leading_dot = raw.startswith(".")
+        domain = raw.lstrip(".")
+        if not domain or domain in seen:
+            continue
+        seen.add(domain)
+
+        # Same-host Domain without widening, or narrowing to a subdomain: not a weakness.
+        if (domain == host and not leading_dot) or domain.endswith(f".{host}"):
+            continue
+
+        covered = [domain, f"*.{domain}"]
+        if domain == host:  # leading dot only
+            severity, title, scope = (
+                "low",
+                "Session cookie Domain uses a leading dot",
+                f"leading-dot Domain=.{domain} widens the cookie to {domain} and "
+                f"every subdomain ({', '.join(covered)})",
+            )
+        elif host.endswith(f".{domain}"):
+            severity, title, scope = (
+                "medium",
+                "Session cookie Domain widened to parent domain",
+                f"Domain={domain} on host {host} persists the session across "
+                f"{domain} and all its subdomains ({', '.join(covered)})",
+            )
+        else:
+            severity, title, scope = (
+                "high",
+                "Session cookie Domain points outside the host",
+                f"Domain={domain} while the page is served from {host} shares the "
+                f"session with {domain} and all its subdomains ({', '.join(covered)})",
+            )
+
+        findings.append(
+            SessionFindingData(
+                kind="domain_scope",
+                severity=severity,
+                title=title,
+                description=f"Cookie '{cookie.name}': {scope}.",
+                target_url=f"https://{host}/" if host else None,
+                evidence={
+                    "cookie": cookie.name,
+                    "domain": cookie.domain,
+                    "host": host,
+                    "leading_dot": leading_dot,
+                    "covered_subdomains": covered,
+                },
+            )
+        )
+
+    return findings
+
+
 # ── Fetch helpers ────────────────────────────────────────────────────────────
 
 def _absolute(base_url: str, path: str) -> str:
@@ -352,9 +560,9 @@ async def fetch_html(target: str, timeout: float = 20.0) -> tuple[httpx.Response
 
 
 async def analyze_target(target: str) -> dict:
-    """Run the full pipeline: forms, redirects, OAuth, session cookies.
+    """Run the full pipeline: forms, redirects, OAuth, session cookies, findings.
 
-    Returns a dict with page info plus the three result lists.
+    Returns a dict with page info plus the four result lists.
     """
     response, html = await fetch_html(target)
     final_url = str(response.url)
@@ -375,6 +583,9 @@ async def analyze_target(target: str) -> dict:
         oauth_flows.extend(await detect_oauth_discovery(final_url, client))
 
     session_cookies = profile_session_cookies(response)
+    host = httpx.URL(final_url).host or ""
+    session_findings = detect_logout_behavior(html, final_url)
+    session_findings.extend(analyze_cookie_domain_scope(session_cookies, host))
 
     return {
         "final_url": final_url,
@@ -382,6 +593,7 @@ async def analyze_target(target: str) -> dict:
         "forms": forms,
         "oauth_flows": oauth_flows,
         "session_cookies": session_cookies,
+        "session_findings": session_findings,
     }
 
 
