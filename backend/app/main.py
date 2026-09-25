@@ -185,6 +185,24 @@ def _persist_analysis(db: Session, analysis: models.FormAnalysis, result: dict) 
             )
         )
 
+    for finding in result["session_findings"]:
+        db.add(
+            models.SessionFinding(
+                analysis_id=analysis.id,
+                kind=finding.kind,
+                category=finding.category,
+                severity=finding.severity,
+                title=finding.title,
+                description=finding.description,
+                target_url=finding.target_url,
+                method=finding.method,
+                csrf_present=(
+                    int(finding.csrf_present) if finding.csrf_present is not None else None
+                ),
+                evidence=json.dumps(finding.evidence) if finding.evidence else None,
+            )
+        )
+
 
 @app.post("/api/auth/token", response_model=TokenResponse)
 def issue_token(request: TokenRequest):
@@ -204,6 +222,7 @@ def _counts(analysis: models.FormAnalysis) -> dict:
         "form_count": len(analysis.forms),
         "oauth_flow_count": len(analysis.oauth_flows),
         "session_cookie_count": len(analysis.session_cookies),
+        "session_finding_count": len(analysis.session_findings),
     }
 
 
@@ -292,6 +311,22 @@ def _analysis_export(analysis: models.FormAnalysis) -> dict:
             }
             for cookie in analysis.session_cookies
         ],
+        "session_findings": [
+            {
+                "kind": finding.kind,
+                "category": finding.category,
+                "severity": finding.severity,
+                "title": finding.title,
+                "description": finding.description,
+                "target_url": finding.target_url,
+                "method": finding.method,
+                "csrf_present": (
+                    bool(finding.csrf_present) if finding.csrf_present is not None else None
+                ),
+                "evidence": json.loads(finding.evidence) if finding.evidence else None,
+            }
+            for finding in analysis.session_findings
+        ],
     }
 
 
@@ -323,6 +358,14 @@ CSV_HEADER = [
     "secure",
     "same_site",
     "max_age",
+    "finding_kind",
+    "finding_severity",
+    "finding_title",
+    "finding_description",
+    "finding_target_url",
+    "finding_method",
+    "finding_csrf",
+    "finding_evidence",
 ]
 
 def _export_csv(analysis: models.FormAnalysis) -> str:
@@ -383,6 +426,24 @@ def _export_csv(analysis: models.FormAnalysis) -> str:
                 "secure": int(cookie.secure or 0),
                 "same_site": cookie.same_site or "",
                 "max_age": cookie.max_age or "",
+            }
+        )
+
+    for finding in analysis.session_findings:
+        writer.writerow(
+            {
+                **base,
+                "kind": "session_finding",
+                "finding_kind": finding.kind or "",
+                "finding_severity": finding.severity or "",
+                "finding_title": finding.title or "",
+                "finding_description": finding.description or "",
+                "finding_target_url": finding.target_url or "",
+                "finding_method": finding.method or "",
+                "finding_csrf": (
+                    int(finding.csrf_present) if finding.csrf_present is not None else ""
+                ),
+                "finding_evidence": finding.evidence or "",
             }
         )
 
@@ -522,6 +583,11 @@ async def websocket_forms(websocket: WebSocket, target: str, token: str | None =
         for cookie in result["session_cookies"]:
             await websocket.send_text(event("item_found", {
                 "kind": "session_cookie", "name": cookie.name, "secure": cookie.secure,
+            }))
+        for finding in result["session_findings"]:
+            await websocket.send_text(event("item_found", {
+                "kind": "session_finding", "severity": finding.severity,
+                "title": finding.title, "target_url": finding.target_url,
             }))
 
         await websocket.send_text(event("analysis_completed", _counts(analysis)))

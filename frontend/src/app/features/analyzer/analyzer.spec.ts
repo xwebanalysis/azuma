@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
-import { ApiService, FormAnalysis } from '../../core/api.service';
+import { AnalysisListItem, ApiService, FormAnalysis } from '../../core/api.service';
 import { LiveService } from '../../core/live.service';
 import { AnalyzerComponent } from './analyzer';
 
@@ -18,7 +18,22 @@ const analysis = {
   forms: [],
   oauth_flows: [],
   session_cookies: [],
+  session_findings: [],
 } as unknown as FormAnalysis;
+
+function listItem(id: number, status: string, created_at: string): AnalysisListItem {
+  return {
+    id,
+    target: 'https://example.com',
+    status,
+    analysis_type: 'form_scan',
+    created_at,
+    form_count: 0,
+    oauth_flow_count: 0,
+    session_cookie_count: 0,
+    session_finding_count: 0,
+  };
+}
 
 describe('AnalyzerComponent', () => {
   let fixture: ComponentFixture<AnalyzerComponent>;
@@ -26,6 +41,11 @@ describe('AnalyzerComponent', () => {
   const apiStub = {
     discoverForms: vi.fn(),
     getAnalysis: vi.fn(),
+    listAnalyses: vi.fn(() => of<AnalysisListItem[]>([])),
+    exportUrl: vi.fn(
+      (id: number, format?: string) =>
+        `http://test/api/analyses/${id}/export?format=${format ?? 'json'}`,
+    ),
     liveUrl: vi.fn((target: string) => `ws://test/api/forms/live?target=${target}`),
   };
   const liveStub = { connect: vi.fn() };
@@ -34,6 +54,7 @@ describe('AnalyzerComponent', () => {
     localStorage.clear();
     apiStub.discoverForms.mockReset();
     apiStub.getAnalysis.mockReset();
+    apiStub.listAnalyses.mockImplementation(() => of<AnalysisListItem[]>([]));
     liveStub.connect.mockReset();
 
     await TestBed.configureTestingModule({
@@ -114,6 +135,19 @@ describe('AnalyzerComponent', () => {
         },
         {
           seq: 6,
+          type: 'item_found',
+          tool: 'azuma',
+          analysis_id: '9',
+          ts: '2026-09-12T10:00:04Z',
+          payload: {
+            kind: 'session_finding',
+            severity: 'low',
+            title: 'Logout uses state-changing GET',
+            target_url: 'https://example.com/logout',
+          },
+        },
+        {
+          seq: 7,
           type: 'analysis_completed',
           tool: 'azuma',
           analysis_id: '9',
@@ -136,9 +170,45 @@ describe('AnalyzerComponent', () => {
     expect(
       component.terminalLines.some((line: string) => line.includes('+ COOKIE sessionid secure=YES')),
     ).toBe(true);
+    expect(
+      component.terminalLines.some(
+        (line: string) => line.includes('+ SESSION [LOW] Logout uses state-changing GET'),
+      ),
+    ).toBe(true);
     expect(component.analysis?.id).toBe(9);
     expect(component.liveRunning).toBe(false);
     expect(component.phaseState.cookies).toBe('done');
+  });
+
+  it('should restore the latest COMPLETED analysis on init', () => {
+    apiStub.listAnalyses.mockImplementation(() =>
+      of<AnalysisListItem[]>([
+        listItem(5, 'ERROR', '2026-09-10T10:00:00'),
+        listItem(9, 'COMPLETED', '2026-09-12T10:00:00'),
+      ]),
+    );
+    apiStub.getAnalysis.mockReturnValue(of(analysis));
+
+    fixture = TestBed.createComponent(AnalyzerComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(apiStub.listAnalyses).toHaveBeenCalled();
+    expect(apiStub.getAnalysis).toHaveBeenCalledWith(9);
+    expect(component.analysis?.id).toBe(9);
+  });
+
+  it('should not restore when there is no COMPLETED analysis', () => {
+    apiStub.listAnalyses.mockImplementation(() =>
+      of<AnalysisListItem[]>([listItem(5, 'ERROR', '2026-09-10T10:00:00')]),
+    );
+
+    fixture = TestBed.createComponent(AnalyzerComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(apiStub.getAnalysis).not.toHaveBeenCalled();
+    expect(component.analysis).toBeNull();
   });
 
   it('should surface analysis_error events inline (top-level xwa-sdk Error payload)', () => {

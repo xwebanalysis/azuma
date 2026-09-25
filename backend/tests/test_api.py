@@ -32,12 +32,21 @@ def test_discover_persists_and_list(client, fake_analyzer, create_analysis):
     assert created["form_count"] == 1
     assert created["oauth_flow_count"] == 1
     assert created["session_cookie_count"] == 1
+    assert created["session_finding_count"] == 1
     assert analysis["forms"][0]["fields"][1]["is_csrf"] is True
+
+    finding = analysis["session_findings"][0]
+    assert finding["category"] == "session"
+    assert finding["kind"] == "logout"
+    assert finding["severity"] == "low"
+    assert finding["method"] == "GET"
+    assert finding["evidence"] is not None
 
     listed = client.get("/api/analyses").json()
     assert len(listed) == 1
     assert listed[0]["id"] == analysis["id"]
     assert listed[0]["form_count"] == 1
+    assert listed[0]["session_finding_count"] == 1
 
 
 def test_discover_upstream_error_envelope(client, monkeypatch):
@@ -77,6 +86,7 @@ def test_detail_export_and_delete(client, fake_analyzer, create_analysis):
         f'attachment; filename="azuma-analysis-{analysis_id}.json"'
     )
     assert export_json.json()["forms"][0]["action"] == "/login"
+    assert export_json.json()["session_findings"][0]["title"] == "Logout uses state-changing GET"
 
     export_csv = client.get(f"/api/analyses/{analysis_id}/export?format=csv")
     assert export_csv.status_code == 200
@@ -86,6 +96,7 @@ def test_detail_export_and_delete(client, fake_analyzer, create_analysis):
     assert lines[0].startswith("kind,analysis_id,target")
     assert any(line.startswith("form,") and "/login" in line for line in lines)
     assert any(line.startswith("session_cookie,") and "sessionid" in line for line in lines)
+    assert any(line.startswith("session_finding,") and "logout" in line for line in lines)
 
     bad_format = client.get(f"/api/analyses/{analysis_id}/export?format=xml")
     assert bad_format.status_code == 422
@@ -107,12 +118,13 @@ def test_delete_all(client, fake_analyzer, create_analysis):
 
 def test_websocket_event_shape_and_analysis_id(client, fake_analyzer):
     with client.websocket_connect("/api/forms/live?target=https://example.com") as ws:
-        events = [ws.receive_json() for _ in range(6)]
+        events = [ws.receive_json() for _ in range(7)]
 
-    assert [event["seq"] for event in events] == [1, 2, 3, 4, 5, 6]
+    assert [event["seq"] for event in events] == [1, 2, 3, 4, 5, 6, 7]
     assert [event["type"] for event in events] == [
         "analysis_started",
         "analysis_progress",
+        "item_found",
         "item_found",
         "item_found",
         "item_found",
@@ -132,8 +144,15 @@ def test_websocket_event_shape_and_analysis_id(client, fake_analyzer):
         assert parsed.utcoffset() == timedelta(0)
         assert event["analysis_id"] == analysis_id
 
-    assert events[5]["payload"]["form_count"] == 1
-    assert events[5]["payload"]["session_cookie_count"] == 1
+    finding_event = next(
+        e for e in events if e["type"] == "item_found"
+        and e["payload"]["kind"] == "session_finding"
+    )
+    assert finding_event["payload"]["severity"] == "low"
+
+    assert events[6]["payload"]["form_count"] == 1
+    assert events[6]["payload"]["session_cookie_count"] == 1
+    assert events[6]["payload"]["session_finding_count"] == 1
 
 
 def test_rate_limit_envelope(client, monkeypatch):

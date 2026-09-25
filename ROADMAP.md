@@ -29,8 +29,8 @@ This file is formatted to be synced automatically with GitHub Issues using the `
 
 - [x] Profile session cookie attributes (flags, scope, lifetime)
 - [ ] Detect session fixation (cookie rotation after authentication) — not possible in the passive single-fetch model; requires stateful pre/post-login requests. Hijacking indicators (HttpOnly/Secure/SameSite) are covered by cookie profiling. See docs/architecture.md
-- [ ] Analyze logout and session invalidation behavior
-- [ ] Map session persistence across subdomains
+- [x] Analyze logout and session invalidation behavior
+- [x] Map session persistence across subdomains
 
 ## Reporting & Production Hardening <!-- phase:production-hardening -->
 

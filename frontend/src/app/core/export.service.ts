@@ -30,12 +30,25 @@ const CSV_HEADER = [
   'secure',
   'same_site',
   'max_age',
+  'finding_kind',
+  'finding_severity',
+  'finding_title',
+  'finding_description',
+  'finding_target_url',
+  'finding_method',
+  'finding_csrf',
+  'finding_evidence',
 ];
 
 /** Build the client-side CSV export for a form analysis. */
 export function analysisToCsv(analysis: FormAnalysis): string {
   const rows: (string | number)[][] = [[...CSV_HEADER]];
   const base = [analysis.id, analysis.target];
+  const width = CSV_HEADER.length;
+  const pad = (row: (string | number)[]): (string | number)[] => [
+    ...row,
+    ...Array<string>(Math.max(0, width - row.length)).fill(''),
+  ];
 
   for (const form of analysis.forms) {
     const formBase = [
@@ -48,52 +61,79 @@ export function analysisToCsv(analysis: FormAnalysis): string {
       form.is_secure ? 1 : 0,
     ];
     if (form.fields.length === 0) {
-      rows.push(formBase);
+      rows.push(pad(formBase));
     }
     for (const field of form.fields) {
-      rows.push([
-        ...formBase,
-        field.name ?? '',
-        field.input_type ?? '',
-        field.required ? 1 : 0,
-        field.is_csrf ? 1 : 0,
-        field.autocomplete ?? '',
-      ]);
+      rows.push(
+        pad([
+          ...formBase,
+          field.name ?? '',
+          field.input_type ?? '',
+          field.required ? 1 : 0,
+          field.is_csrf ? 1 : 0,
+          field.autocomplete ?? '',
+        ]),
+      );
     }
   }
 
   for (const flow of analysis.oauth_flows) {
-    rows.push([
-      'oauth_flow',
-      ...base,
-      '', '', '', '', '',
-      '', '', '', '', '',
-      flow.endpoint ?? '',
-      flow.flow_type ?? '',
-      flow.client_id ?? '',
-      flow.redirect_uri ?? '',
-      flow.scope ?? '',
-      flow.uses_state ? 1 : 0,
-      flow.weakness ?? '',
-    ]);
+    rows.push(
+      pad([
+        'oauth_flow',
+        ...base,
+        '', '', '', '', '',
+        '', '', '', '', '',
+        flow.endpoint ?? '',
+        flow.flow_type ?? '',
+        flow.client_id ?? '',
+        flow.redirect_uri ?? '',
+        flow.scope ?? '',
+        flow.uses_state ? 1 : 0,
+        flow.weakness ?? '',
+      ]),
+    );
   }
 
   for (const cookie of analysis.session_cookies) {
-    rows.push([
-      'session_cookie',
-      ...base,
-      '', '', '', '', '',
-      '', '', '', '', '',
-      '', '', '', '', '', '',
-      '',
-      cookie.name ?? '',
-      cookie.domain ?? '',
-      cookie.path ?? '',
-      cookie.http_only ? 1 : 0,
-      cookie.secure ? 1 : 0,
-      cookie.same_site ?? '',
-      cookie.max_age ?? '',
-    ]);
+    rows.push(
+      pad([
+        'session_cookie',
+        ...base,
+        '', '', '', '', '',
+        '', '', '', '', '',
+        '', '', '', '', '', '',
+        '',
+        cookie.name ?? '',
+        cookie.domain ?? '',
+        cookie.path ?? '',
+        cookie.http_only ? 1 : 0,
+        cookie.secure ? 1 : 0,
+        cookie.same_site ?? '',
+        cookie.max_age ?? '',
+      ]),
+    );
+  }
+
+  for (const finding of analysis.session_findings ?? []) {
+    rows.push(
+      pad([
+        'session_finding',
+        ...base,
+        '', '', '', '', '',
+        '', '', '', '', '',
+        '', '', '', '', '', '',
+        '', '', '', '', '', '', '',
+        finding.kind ?? '',
+        finding.severity ?? '',
+        finding.title ?? '',
+        finding.description ?? '',
+        finding.target_url ?? '',
+        finding.method ?? '',
+        finding.csrf_present === null ? '' : finding.csrf_present ? 1 : 0,
+        finding.evidence ?? '',
+      ]),
+    );
   }
 
   return rows.map((row) => row.map((cell) => escapeCsv(cell)).join(',')).join('\n');
@@ -198,6 +238,15 @@ export class ExportService {
       line(
         `- ${cookie.name ?? 'unnamed'} [${cookie.http_only ? 'httponly' : 'no-httponly'} / ` +
           `${cookie.secure ? 'secure' : 'no-secure'} / samesite=${cookie.same_site ?? 'n/a'}]`,
+      );
+    }
+    y += 4;
+
+    line('SESSION FINDINGS', 11, 'bold');
+    for (const finding of analysis.session_findings ?? []) {
+      line(
+        `- [${finding.severity ?? 'n/a'}] ${finding.title ?? ''} ` +
+          `${finding.target_url ?? ''}`,
       );
     }
 

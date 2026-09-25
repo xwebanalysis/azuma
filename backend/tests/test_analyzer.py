@@ -2,8 +2,12 @@
 
 import httpx
 import pytest
+from xwa_sdk import SEVERITIES
 
 from app.analyzer import (
+    SessionCookieData,
+    analyze_cookie_domain_scope,
+    detect_logout_behavior,
     detect_oauth_in_html,
     parse_forms,
     profile_session_cookies,
@@ -122,3 +126,137 @@ def test_profile_session_cookie_flags_missing():
     assert cookie.http_only is False
     assert cookie.secure is False
     assert cookie.same_site is None
+
+
+# ── Logout behavior detection ────────────────────────────────────────────────
+
+LOGOUT_HTML = """
+<html><body>
+  <form method="get" action="/logout">
+    <input type="submit" value="Sign out">
+  </form>
+  <form method="post" action="/account/cerrar-sesion">
+    <input type="hidden" name="csrfmiddlewaretoken" value="aB3xY9qW7eR2tU5iO8pL1kM4nJ6hG0vC">
+    <input type="submit" value="Salir">
+  </form>
+  <form method="post" action="/signout">
+    <input type="submit" value="Sign out">
+  </form>
+  <a href="https://example.com/salir">Salir</a>
+</body></html>
+"""
+
+
+def test_detect_logout_get_form_is_weakness():
+    findings = [f for f in detect_logout_behavior(LOGOUT_HTML, "https://example.com/")
+                if "/logout" in (f.target_url or "")]
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.category == "session"
+    assert finding.severity == "low"
+    assert finding.method == "GET"
+    assert "state-changing GET" in finding.title.lower() or "GET" in finding.title
+    assert finding.evidence["source"] == "form"
+
+
+def test_detect_logout_post_with_csrf_is_informational():
+    findings = [
+        f for f in detect_logout_behavior(LOGOUT_HTML, "https://example.com/")
+        if f.method == "POST"
+    ]
+    with_csrf = [f for f in findings if "cerrar-sesion" in (f.target_url or "")]
+    assert len(with_csrf) == 1
+    assert with_csrf[0].severity == "info"
+    assert with_csrf[0].csrf_present is True
+
+
+def test_detect_logout_post_without_csrf_is_weakness():
+    findings = [
+        f for f in detect_logout_behavior(LOGOUT_HTML, "https://example.com/")
+        if f.method == "POST"
+    ]
+    no_csrf = [f for f in findings if "/signout" in (f.target_url or "")]
+    assert len(no_csrf) == 1
+    assert no_csrf[0].severity == "medium"
+    assert no_csrf[0].csrf_present is False
+    assert "csrf" in no_csrf[0].title.lower()
+
+
+def test_detect_logout_link_is_weakness():
+    findings = [
+        f for f in detect_logout_behavior(LOGOUT_HTML, "https://example.com/")
+        if f.evidence and f.evidence["source"] == "link"
+    ]
+    assert len(findings) == 1
+    assert findings[0].severity == "low"
+    assert findings[0].method == "GET"
+    assert findings[0].target_url == "https://example.com/salir"
+
+
+def test_detect_logout_ignores_unrelated_links():
+    html = '<a href="/settings">Settings</a><a href="/download">Download</a>'
+    assert detect_logout_behavior(html, "https://example.com/") == []
+
+
+def test_session_finding_severities_follow_xwa_sdk_scale():
+    findings = detect_logout_behavior(LOGOUT_HTML, "https://example.com/")
+    for finding in findings:
+        assert finding.severity in SEVERITIES
+
+
+# ── Cookie domain scope mapping ──────────────────────────────────────────────
+
+def _cookie(name="sessionid", domain=None):
+    return SessionCookieData(
+        name=name,
+        value_preview="abc123",
+        domain=domain,
+        path="/",
+        http_only=True,
+        secure=True,
+        same_site="Lax",
+        max_age="3600",
+    )
+
+
+def test_cookie_domain_parent_widens_scope():
+    findings = analyze_cookie_domain_scope(
+        [_cookie(domain=".example.com")], "www.example.com"
+    )
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.kind == "domain_scope"
+    assert finding.severity == "medium"
+    covered = finding.evidence["covered_subdomains"]
+    assert "example.com" in covered
+    assert "*.example.com" in covered
+    assert finding.evidence["host"] == "www.example.com"
+
+
+def test_cookie_domain_leading_dot_same_host_is_low():
+    findings = analyze_cookie_domain_scope([_cookie(domain=".example.com")], "example.com")
+    assert len(findings) == 1
+    assert findings[0].severity == "low"
+    assert findings[0].evidence["leading_dot"] is True
+
+
+def test_cookie_domain_same_host_not_flagged():
+    assert analyze_cookie_domain_scope([_cookie(domain="example.com")], "example.com") == []
+
+
+def test_cookie_domain_subdomain_narrowing_not_flagged():
+    assert (
+        analyze_cookie_domain_scope([_cookie(domain="www.example.com")], "example.com")
+        == []
+    )
+
+
+def test_cookie_domain_foreign_domain_is_high():
+    findings = analyze_cookie_domain_scope([_cookie(domain="example.org")], "example.com")
+    assert len(findings) == 1
+    assert findings[0].severity == "high"
+    assert "outside the host" in findings[0].title.lower()
+
+
+def test_cookie_domain_missing_not_flagged():
+    assert analyze_cookie_domain_scope([_cookie(domain=None)], "example.com") == []
