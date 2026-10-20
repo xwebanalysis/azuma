@@ -108,3 +108,8 @@ frontend/
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) — next: session fixation analysis (requires stateful flows), logout/subdomain session mapping.
+
+## License
+
+Proprietary — All rights reserved. See [LICENSE](LICENSE) for the full terms.
+For permission requests: x@xscriptor.com
